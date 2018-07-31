@@ -1,0 +1,81 @@
+@import "./css/common";
+@import '../node_modules/swiper/dist/css/swiper.min.css';
+.calender-week-wrapper {
+  background: rgba(255, 255, 255, 1);
+  .calender-month {
+    position: relative;
+    border-bottom: 1px solid #e6e6e6;
+    .month-list {
+      .month-item {
+        width: 100%;
+        text-align: center;
+        padding: 28/@rem 0;
+        .month {
+          display: inline-block;
+          .data-dpr(16px);
+          color: #4d5270;
+          position: relative;
+        }
+      }
+    }
+  }
+  .swiper-container {
+    width: 100%;
+  }
+  .calender-week {
+    .clearfix();
+    padding-top: 40/@rem;
+    .week-item {
+      display: block;
+      .float(left);
+      width: 14.28%;
+      .data-dpr(15px);
+      color: #999;
+      text-align: center;
+    }
+  }
+  .calender-day {
+    margin-top: 18/@rem;
+    .day-items {
+      .clearfix();
+      .item {
+        .float(left);
+        width: 14.28%;
+        height: 70/@rem;
+        position: relative;
+        text-align: center;
+        .day {
+          display: flex;
+          align-items:center;
+          justify-content: center;
+          width: 64/@rem;
+          height: 64/@rem;
+          // padding: 16/@rem 0;
+          //line-height: 1;
+          // text-align: center;
+          .data-dpr(15px);
+          color: #999;
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          .transform(translate(-50%, -50%));
+          .border-radius(64/@rem);
+          &.current {
+            background: #59BBFF;
+            color: #fff !important;
+            .data-dpr(16px);
+          }
+          &.no-today {
+            width: 46/@rem;
+            height: 46/@rem;
+            line-height: 1;
+            padding:10/@rem 0;
+            background: #ffb39c;
+            color: #fff;
+            .data-dpr(15px);
+          }
+        }
+      }
+    }
+  }
+}

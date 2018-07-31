@@ -1,0 +1,27 @@
+<div class="calender-week-wrapper">
+  <div ref="calenderMonthWrapper" class="calender-month" v-if="calenderOption.showHeader">
+    <div class="month-list swiper-wrapper">
+      <div class="month-item">
+        <span class="month">{{dateDescription}}</span>
+      </div>
+    </div>
+  </div>
+  <div class="calender-week">
+    <span class="week-item">日</span>
+    <span class="week-item">一</span>
+    <span class="week-item">二</span>
+    <span class="week-item">三</span>
+    <span class="week-item">四</span>
+    <span class="week-item">五</span>
+    <span class="week-item">六</span>
+  </div>
+  {{calendarOptionComputed}}
+  <swiper class="calender-day" :options="daySwiperOption" ref="daySwiper">
+    <swiper-slide v-for="weekCalender in weekCalender.WeekDayList" class="day-items swiper-slide">
+      <div v-for="item in weekCalender.dayList" :data-date="item.currentDate" class="item">
+        <span v-on:click="chooseDayItemHandle(item,$event)" :class="item.dayClass">{{item.dayDesc}}</span>
+      </div>
+    </swiper-slide>
+
+  </swiper>
+</div>
