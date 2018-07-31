@@ -5,7 +5,6 @@ typescript+vue开发的日历组件，使用swiper库来支持日历滑动功能
 #### 代码示例
 
 ![image](https://github.com/ljcheibao/vue-component-weekcalender/blob/master/images/one.png)
-
 ![image](https://github.com/ljcheibao/vue-component-weekcalender/blob/master/images/two.png)
 
 - 安装组件包
