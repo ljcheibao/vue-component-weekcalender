@@ -6,7 +6,8 @@ import {
   Component,
   Emit,
   Prop,
-  Vue
+  Vue,
+  Watch
 } from 'vue-property-decorator';
 import { Calender } from "./CalenderModel";
 //@ts-ignore
@@ -28,7 +29,8 @@ import { swiper, swiperSlide } from 'vue-awesome-swiper';
  */
 export default class CalendarWeek extends Vue {
 
-  dateDescription: string = "";
+  //日期描述
+  private dateDescription: string = "";
 
   /**
    * 设置每月对应的天数
@@ -49,9 +51,9 @@ export default class CalendarWeek extends Vue {
   };
 
   /**
-   * 天的swiper对象
+   * swiper对象
    */
-  daySwiper: any;
+  private daySwiper: any;
 
   /**
    * 天 swiper options
@@ -69,20 +71,49 @@ export default class CalendarWeek extends Vue {
   }
 
   //swiper的slide切换记录的索引
-  daySwiperIndex: number = 1;
+  private daySwiperIndex: number = 1;
 
   //swiper的slide切换的临时日期
-  daySwiperTempDate: string;
+  private daySwiperTempDate: string;
 
-  //日历组件可选项
-  @Prop()
-  private option: Calender.CalenderOptions;
+  //临时存放每天的记录标识
+  private tempDayStatus: any = {};
 
   //配置项的copy副本
   private tempOption: Calender.CalenderOptions = new Calender.CalenderOptions();
 
   //日历组件配置项数据
   private calenderOption: Calender.CalenderOptions = new Calender.CalenderOptions();
+
+  //每天的状态数据记录
+  private dayStatus: Array<Calender.DayStatus> = [];
+
+  /**
+   * 多少周
+   */
+  private weekCalender: Calender.WeekCalender = new Calender.WeekCalender();
+
+  /**
+   * 用于记录每周数据，判断到底是否应该生成新的日历
+   */
+  private daySwiperIncludes: Array<string> = [];
+
+  //日历组件可选项
+  @Prop()
+  option: Calender.CalenderOptions;
+
+  //修改每天日期的状态，
+  @Prop()
+  status: Array<Calender.DayStatus>;
+
+  //记录watch的每天日期的reset情况
+  watchDayStatusData: any = {
+    items: null
+  };
+
+  //重置每天日期的相关状态，比如：enabled状态
+  @Prop()
+  reset: boolean;
 
   /**
    * 计算属性，计算option的变化
@@ -106,15 +137,113 @@ export default class CalendarWeek extends Vue {
   }
 
   /**
-   * 多少个月日历
+   * 计算属性，监听status的变化
+   * @return {string} 返回空字符串
    */
-  private weekCalender: Calender.WeekCalender = new Calender.WeekCalender();
+  get calenderDayStatusComputed(): string {
+    this.watchDayStatusData.items = [];
+    for (let item of this.status) {
+      this.watchDayStatusData.items.push(Object.assign({}, item));
+    }
+    return "";
+  }
 
+  @Watch("watchDayStatusData", { deep: true })
+  watchDayStatusChange(newVal, oldVal): void {
+    //重置每天日期状态
+    let dayStatus = [];
+    for (let item of newVal.items) {
+      dayStatus.push(Object.assign({}, item));
+    }
+    this.resetDayStatus(dayStatus);
+  }
 
   /**
-   * 用于记录日历月份的数据，判断到底是否应该生成新的日历
+   * 重置每天日期状态
+   * @param {Array<Calender.DayStatus>} dayStatus 要重置的状态
+   * @return {void} 无返回值
    */
-  private daySwiperIncludes: Array<string> = [];
+  resetDayStatus(status: Array<Calender.DayStatus>): void {
+    //@ts-ignore
+    let dayStatus: Array<Calender.DayStatus> = status;
+
+    //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
+    //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
+    dayStatus = dayStatus.sort(function (a, b) {
+      if (a > b) return 1;
+      else return -1;
+    });
+
+    let key = dayStatus[dayStatus.length - 1].currentDate;
+    if (!this.tempDayStatus[key]) {
+      for (let item of dayStatus) {
+        if (item.default) {
+          this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
+          //this.tempOption.currentDate = item.currentDate;
+          break;
+        }
+      }
+      //重新生成日历
+      this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
+    }
+
+    //重置每天状态
+    let today = Utils.dateFormat("yyyy-MM-dd", new Date());
+    if (!dayStatus || dayStatus.length <= 0) {
+      for (let item of this.weekCalender.WeekDayList) {
+        for (let item1 of item.dayList) {
+          if (item1.currentDate == today) {
+            item1.dayDesc = Utils.dateFormat("d", new Date());
+            item1.dayClass = "day";
+            break;
+          }
+        }
+      }
+      return;
+    }
+    for (let item of dayStatus) {
+      for (let item1 of this.weekCalender.WeekDayList) {
+        for (let item2 of item1.dayList) {
+          if (!item2.dayDesc) continue;
+          if (item.default) { //存在默认的天数，则reset每天的状态
+            if (item2.dayClass == "day current") {
+              item2.dayClass = "day";
+              if (item2.currentDate == today) {
+                item2.dayDesc = Utils.dateFormat("d", new Date());
+                item2.oriDayDesc = item2.dayDesc;
+              }
+            }
+          }
+
+          if (item2.currentDate != item.currentDate) continue;
+
+          item2.dayDesc = item.dayDesc || item2.dayDesc;
+          item2.oriDayDesc = item.dayDesc || item2.dayDesc;
+          item2.dayClass = item.dayClass;
+          item2.oriDayClass = item.dayClass;
+          item2.enabled = item.enabled;
+          if (item.default) { //如果当天是默认选中的话
+            if (item.currentDate == today) {
+              item2.dayDesc = "今";
+              item2.oriDayDesc = item2.dayDesc;
+              item2.dayClass = "day current";
+            } else {
+              item2.dayClass = "day current";
+            }
+          }
+        }
+      }
+    }
+
+    // let tempDate = new Date();
+    // tempDate.setDate(tempDate.getDate() + 6 - tempDate.getDay());
+    // let beginDate = Utils.createCorrectDate(Utils.dateFormat("yyyy-MM-dd", tempDate));
+    // let endDate: Date = <Date>this.calenderOption.currentDate;
+    // endDate.setDate(endDate.getDate() + 6 - endDate.getDay());
+    // let diffDay = Utils.diffDate("d", beginDate, endDate);
+    // let activeIndex = diffDay / 7;
+    // if (this.daySwiper) this.daySwiper.slideTo(activeIndex, 300);
+  }
 
   /**
    * 初始化周日历组件相关配置数据
@@ -128,6 +257,7 @@ export default class CalendarWeek extends Vue {
     this.weekCalender.WeekDayList.length = 0;
     this.daySwiperTempDate = "";
     this.daySwiperIndex = 1;
+    this.tempDayStatus = {};
     //重置daySwiper的索引
     if (this.daySwiper) {
       this.daySwiper.activeIndex = 1;
@@ -161,9 +291,13 @@ export default class CalendarWeek extends Vue {
       if (tempDate1 <= this.calenderOption.endDate && this.calenderOption.beginDate <= tempDate1) {
         let dayModel: Calender.DayModel = new Calender.DayModel();
         dayModel.currentDate = Utils.dateFormat("yyyy-MM-dd", tempDate1);
+        //临时存放每天的记录标识
+        this.tempDayStatus[dayModel.currentDate] = 1;
         dayModel.day = tempDate1.getDate();
         dayModel.dayDesc = tempDate1.getDate().toString();
         dayModel.oriDayDesc = dayModel.dayDesc;
+        //若设置了reset重置每天状态，则禁止enabled，让调用者通过设置status状态来设定可点击的日期
+        dayModel.enabled = this.reset ? false : true;
         if (today == dayModel.currentDate && today == defaultDay) {
           dayModel.dayDesc = "今";
           dayModel.oriDayDesc = dayModel.dayDesc;

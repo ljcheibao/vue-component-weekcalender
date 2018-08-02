@@ -1,5 +1,5 @@
 import Vue from 'vue';
-import VueWeekcalender from "../dist/index.js";
+import VueWeekcalender from "../src/index.ts";
 
 new Vue({
   el: '#app',
@@ -10,10 +10,22 @@ new Vue({
     return {
       options: {
         showHeader: true,
-        beginDate: "2018-07-30",
-        endDate: "2018-08-12",
+        beginDate: "2018-08-01",
+        endDate: "2018-08-16",
         currentDate: "2018-08-03"
-      }
+      },
+      reset: true,
+      dayStatus: [{
+        currentDate: "2018-08-13",
+        dayClass: "day enabled",
+        enabled: true,
+        default: true
+      }, {
+        currentDate: "2018-08-14",
+        dayClass: "day enabled",
+        enabled: true,
+        default: false
+      }]
     }
   },
   methods: {
@@ -21,7 +33,7 @@ new Vue({
       console.log(dayItem)
     },
 
-    slideChangeHandle:function(item) {
+    slideChangeHandle: function (item) {
       console.log(item);
     }
   }

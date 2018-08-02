@@ -30,17 +30,30 @@ export namespace Calender {
   export class DayStatus {
 
     /**
-     * 每天状态列表
+     * 当前日期,格式yyyy-MM-dd
      */
-    dayStatusList: Array<{
-      currentDate: string,
-      dayDesc: string,
-      dayClass: string,
-      enabled: boolean,
-      default: boolean
-    }> = [];
-  }
+    currentDate: string;
 
+    /**
+     * 每天日期的描述
+     */
+    dayDesc: string;
+
+    /**
+     * 类名称
+     */
+    dayClass: string;
+
+    /**
+     * 是否可以点击，true表示可以点击
+     */
+    enabled: boolean;
+
+    /**
+     * 是否日历上默认显示，true表示默认显示
+     */
+    default: boolean;
+  }
 
 
   /**
