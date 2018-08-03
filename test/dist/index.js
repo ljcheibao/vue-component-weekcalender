@@ -63,7 +63,7 @@
 /******/ 	__webpack_require__.p = "";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 8);
+/******/ 	return __webpack_require__(__webpack_require__.s = 10);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -74,14 +74,6 @@ module.exports = Vue;
 
 /***/ }),
 /* 1 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-module.exports = [];
-
-/***/ }),
-/* 2 */
 /***/ (function(module, exports) {
 
 /*
@@ -163,12 +155,61 @@ function toComment(sourceMap) {
 
 
 /***/ }),
-/* 3 */
+/* 2 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
-module.exports = {};
+module.exports = [];
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports) {
+
+
+(function (win) {
+	var ratio,
+	    scaleValue,
+	    renderTime,
+	    document = window.document,
+	    docElem = document.documentElement,
+	    vpm = document.querySelector('meta[name="viewport"]');
+
+	if (vpm) {
+		var tempArray = vpm.getAttribute("content").match(/initial\-scale=(["']?)([\d\.]+)\1?/);
+		if (tempArray) {
+			scaleValue = parseFloat(tempArray[2]);
+			ratio = parseInt(1 / scaleValue);
+		}
+	} else {
+		vpm = document.createElement("meta");
+		vpm.setAttribute("name", "viewport");
+		vpm.setAttribute("content", "width=device-width, initial-scale=1, user-scalable=no, minimal-ui");
+		docElem.firstElementChild.appendChild(vpm);
+	}
+
+	win.addEventListener("resize", function () {
+		clearTimeout(renderTime);
+		renderTime = setTimeout(initPage, 300);
+	}, false);
+
+	win.addEventListener("pageshow", function (e) {
+		e.persisted && (clearTimeout(renderTime), renderTime = setTimeout(initPage, 300));
+	}, false);
+
+	"complete" === document.readyState ? document.body.style.fontSize = 12 * ratio + "px" : document.addEventListener("DOMContentLoaded", function () {
+		document.body.style.fontSize = 12 * ratio + "px";
+	}, false);
+
+	initPage();
+
+	function initPage() {
+		var htmlWidth = docElem.getBoundingClientRect().width;
+		htmlWidth / ratio > 960 && (htmlWidth = 960 * ratio);
+		win.rem = htmlWidth / 10;
+		docElem.style.fontSize = win.rem + "px";
+	}
+})(window);
 
 /***/ }),
 /* 4 */
@@ -176,9 +217,7 @@ module.exports = {};
 
 "use strict";
 
-var hasOwn = __webpack_require__(5);
-module.exports = hasOwn.toString;
-
+module.exports = {};
 
 /***/ }),
 /* 5 */
@@ -186,22 +225,435 @@ module.exports = hasOwn.toString;
 
 "use strict";
 
-var class2type = __webpack_require__(3);
-module.exports = class2type.hasOwnProperty;
+var hasOwn = __webpack_require__(6);
+module.exports = hasOwn.toString;
+
 
 /***/ }),
 /* 6 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var class2type = __webpack_require__(4);
+module.exports = class2type.hasOwnProperty;
+
+/***/ }),
+/* 7 */
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+	MIT License http://www.opensource.org/licenses/mit-license.php
+	Author Tobias Koppers @sokra
+*/
+
+var stylesInDom = {};
+
+var	memoize = function (fn) {
+	var memo;
+
+	return function () {
+		if (typeof memo === "undefined") memo = fn.apply(this, arguments);
+		return memo;
+	};
+};
+
+var isOldIE = memoize(function () {
+	// Test for IE <= 9 as proposed by Browserhacks
+	// @see http://browserhacks.com/#hack-e71d8692f65334173fee715c222cb805
+	// Tests for existence of standard globals is to allow style-loader
+	// to operate correctly into non-standard environments
+	// @see https://github.com/webpack-contrib/style-loader/issues/177
+	return window && document && document.all && !window.atob;
+});
+
+var getElement = (function (fn) {
+	var memo = {};
+
+	return function(selector) {
+		if (typeof memo[selector] === "undefined") {
+			var styleTarget = fn.call(this, selector);
+			// Special case to return head of iframe instead of iframe itself
+			if (styleTarget instanceof window.HTMLIFrameElement) {
+				try {
+					// This will throw an exception if access to iframe is blocked
+					// due to cross-origin restrictions
+					styleTarget = styleTarget.contentDocument.head;
+				} catch(e) {
+					styleTarget = null;
+				}
+			}
+			memo[selector] = styleTarget;
+		}
+		return memo[selector]
+	};
+})(function (target) {
+	return document.querySelector(target)
+});
+
+var singleton = null;
+var	singletonCounter = 0;
+var	stylesInsertedAtTop = [];
+
+var	fixUrls = __webpack_require__(22);
+
+module.exports = function(list, options) {
+	if (typeof DEBUG !== "undefined" && DEBUG) {
+		if (typeof document !== "object") throw new Error("The style-loader cannot be used in a non-browser environment");
+	}
+
+	options = options || {};
+
+	options.attrs = typeof options.attrs === "object" ? options.attrs : {};
+
+	// Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
+	// tags it will allow on a page
+	if (!options.singleton && typeof options.singleton !== "boolean") options.singleton = isOldIE();
+
+	// By default, add <style> tags to the <head> element
+	if (!options.insertInto) options.insertInto = "head";
+
+	// By default, add <style> tags to the bottom of the target
+	if (!options.insertAt) options.insertAt = "bottom";
+
+	var styles = listToStyles(list, options);
+
+	addStylesToDom(styles, options);
+
+	return function update (newList) {
+		var mayRemove = [];
+
+		for (var i = 0; i < styles.length; i++) {
+			var item = styles[i];
+			var domStyle = stylesInDom[item.id];
+
+			domStyle.refs--;
+			mayRemove.push(domStyle);
+		}
+
+		if(newList) {
+			var newStyles = listToStyles(newList, options);
+			addStylesToDom(newStyles, options);
+		}
+
+		for (var i = 0; i < mayRemove.length; i++) {
+			var domStyle = mayRemove[i];
+
+			if(domStyle.refs === 0) {
+				for (var j = 0; j < domStyle.parts.length; j++) domStyle.parts[j]();
+
+				delete stylesInDom[domStyle.id];
+			}
+		}
+	};
+};
+
+function addStylesToDom (styles, options) {
+	for (var i = 0; i < styles.length; i++) {
+		var item = styles[i];
+		var domStyle = stylesInDom[item.id];
+
+		if(domStyle) {
+			domStyle.refs++;
+
+			for(var j = 0; j < domStyle.parts.length; j++) {
+				domStyle.parts[j](item.parts[j]);
+			}
+
+			for(; j < item.parts.length; j++) {
+				domStyle.parts.push(addStyle(item.parts[j], options));
+			}
+		} else {
+			var parts = [];
+
+			for(var j = 0; j < item.parts.length; j++) {
+				parts.push(addStyle(item.parts[j], options));
+			}
+
+			stylesInDom[item.id] = {id: item.id, refs: 1, parts: parts};
+		}
+	}
+}
+
+function listToStyles (list, options) {
+	var styles = [];
+	var newStyles = {};
+
+	for (var i = 0; i < list.length; i++) {
+		var item = list[i];
+		var id = options.base ? item[0] + options.base : item[0];
+		var css = item[1];
+		var media = item[2];
+		var sourceMap = item[3];
+		var part = {css: css, media: media, sourceMap: sourceMap};
+
+		if(!newStyles[id]) styles.push(newStyles[id] = {id: id, parts: [part]});
+		else newStyles[id].parts.push(part);
+	}
+
+	return styles;
+}
+
+function insertStyleElement (options, style) {
+	var target = getElement(options.insertInto)
+
+	if (!target) {
+		throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");
+	}
+
+	var lastStyleElementInsertedAtTop = stylesInsertedAtTop[stylesInsertedAtTop.length - 1];
+
+	if (options.insertAt === "top") {
+		if (!lastStyleElementInsertedAtTop) {
+			target.insertBefore(style, target.firstChild);
+		} else if (lastStyleElementInsertedAtTop.nextSibling) {
+			target.insertBefore(style, lastStyleElementInsertedAtTop.nextSibling);
+		} else {
+			target.appendChild(style);
+		}
+		stylesInsertedAtTop.push(style);
+	} else if (options.insertAt === "bottom") {
+		target.appendChild(style);
+	} else if (typeof options.insertAt === "object" && options.insertAt.before) {
+		var nextSibling = getElement(options.insertInto + " " + options.insertAt.before);
+		target.insertBefore(style, nextSibling);
+	} else {
+		throw new Error("[Style Loader]\n\n Invalid value for parameter 'insertAt' ('options.insertAt') found.\n Must be 'top', 'bottom', or Object.\n (https://github.com/webpack-contrib/style-loader#insertat)\n");
+	}
+}
+
+function removeStyleElement (style) {
+	if (style.parentNode === null) return false;
+	style.parentNode.removeChild(style);
+
+	var idx = stylesInsertedAtTop.indexOf(style);
+	if(idx >= 0) {
+		stylesInsertedAtTop.splice(idx, 1);
+	}
+}
+
+function createStyleElement (options) {
+	var style = document.createElement("style");
+
+	options.attrs.type = "text/css";
+
+	addAttrs(style, options.attrs);
+	insertStyleElement(options, style);
+
+	return style;
+}
+
+function createLinkElement (options) {
+	var link = document.createElement("link");
+
+	options.attrs.type = "text/css";
+	options.attrs.rel = "stylesheet";
+
+	addAttrs(link, options.attrs);
+	insertStyleElement(options, link);
+
+	return link;
+}
+
+function addAttrs (el, attrs) {
+	Object.keys(attrs).forEach(function (key) {
+		el.setAttribute(key, attrs[key]);
+	});
+}
+
+function addStyle (obj, options) {
+	var style, update, remove, result;
+
+	// If a transform function was defined, run it on the css
+	if (options.transform && obj.css) {
+	    result = options.transform(obj.css);
+
+	    if (result) {
+	    	// If transform returns a value, use that instead of the original css.
+	    	// This allows running runtime transformations on the css.
+	    	obj.css = result;
+	    } else {
+	    	// If the transform function returns a falsy value, don't add this css.
+	    	// This allows conditional loading of css
+	    	return function() {
+	    		// noop
+	    	};
+	    }
+	}
+
+	if (options.singleton) {
+		var styleIndex = singletonCounter++;
+
+		style = singleton || (singleton = createStyleElement(options));
+
+		update = applyToSingletonTag.bind(null, style, styleIndex, false);
+		remove = applyToSingletonTag.bind(null, style, styleIndex, true);
+
+	} else if (
+		obj.sourceMap &&
+		typeof URL === "function" &&
+		typeof URL.createObjectURL === "function" &&
+		typeof URL.revokeObjectURL === "function" &&
+		typeof Blob === "function" &&
+		typeof btoa === "function"
+	) {
+		style = createLinkElement(options);
+		update = updateLink.bind(null, style, options);
+		remove = function () {
+			removeStyleElement(style);
+
+			if(style.href) URL.revokeObjectURL(style.href);
+		};
+	} else {
+		style = createStyleElement(options);
+		update = applyToTag.bind(null, style);
+		remove = function () {
+			removeStyleElement(style);
+		};
+	}
+
+	update(obj);
+
+	return function updateStyle (newObj) {
+		if (newObj) {
+			if (
+				newObj.css === obj.css &&
+				newObj.media === obj.media &&
+				newObj.sourceMap === obj.sourceMap
+			) {
+				return;
+			}
+
+			update(obj = newObj);
+		} else {
+			remove();
+		}
+	};
+}
+
+var replaceText = (function () {
+	var textStore = [];
+
+	return function (index, replacement) {
+		textStore[index] = replacement;
+
+		return textStore.filter(Boolean).join('\n');
+	};
+})();
+
+function applyToSingletonTag (style, index, remove, obj) {
+	var css = remove ? "" : obj.css;
+
+	if (style.styleSheet) {
+		style.styleSheet.cssText = replaceText(index, css);
+	} else {
+		var cssNode = document.createTextNode(css);
+		var childNodes = style.childNodes;
+
+		if (childNodes[index]) style.removeChild(childNodes[index]);
+
+		if (childNodes.length) {
+			style.insertBefore(cssNode, childNodes[index]);
+		} else {
+			style.appendChild(cssNode);
+		}
+	}
+}
+
+function applyToTag (style, obj) {
+	var css = obj.css;
+	var media = obj.media;
+
+	if(media) {
+		style.setAttribute("media", media)
+	}
+
+	if(style.styleSheet) {
+		style.styleSheet.cssText = css;
+	} else {
+		while(style.firstChild) {
+			style.removeChild(style.firstChild);
+		}
+
+		style.appendChild(document.createTextNode(css));
+	}
+}
+
+function updateLink (link, options, obj) {
+	var css = obj.css;
+	var sourceMap = obj.sourceMap;
+
+	/*
+		If convertToAbsoluteUrls isn't defined, but sourcemaps are enabled
+		and there is no publicPath defined then lets turn convertToAbsoluteUrls
+		on by default.  Otherwise default to the convertToAbsoluteUrls option
+		directly
+	*/
+	var autoFixUrls = options.convertToAbsoluteUrls === undefined && sourceMap;
+
+	if (options.convertToAbsoluteUrls || autoFixUrls) {
+		css = fixUrls(css);
+	}
+
+	if (sourceMap) {
+		// http://stackoverflow.com/a/26603875
+		css += "\n/*# sourceMappingURL=data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap)))) + " */";
+	}
+
+	var blob = new Blob([css], { type: "text/css" });
+
+	var oldSrc = link.href;
+
+	link.href = URL.createObjectURL(blob);
+
+	if(oldSrc) URL.revokeObjectURL(oldSrc);
+}
+
+
+/***/ }),
+/* 8 */
+/***/ (function(module, exports, __webpack_require__) {
+
+// style-loader: Adds some css to the DOM by adding a <style> tag
+
+// load the styles
+var content = __webpack_require__(13);
+if(typeof content === 'string') content = [[module.i, content, '']];
+// Prepare cssTransformation
+var transform;
+
+var options = {"hmr":true}
+options.transform = transform
+// add the styles to the DOM
+var update = __webpack_require__(7)(content, options);
+if(content.locals) module.exports = content.locals;
+// Hot Module Replacement
+if(false) {
+	// When the styles change, update the <style> tags
+	if(!content.locals) {
+		module.hot.accept("!!./node_modules/_css-loader@0.28.11@css-loader/index.js!./node_modules/_less-loader@4.1.0@less-loader/dist/cjs.js!./index.less", function() {
+			var newContent = require("!!./node_modules/_css-loader@0.28.11@css-loader/index.js!./node_modules/_less-loader@4.1.0@less-loader/dist/cjs.js!./index.less");
+			if(typeof newContent === 'string') newContent = [[module.id, newContent, '']];
+			update(newContent);
+		});
+	}
+	// When the module is disposed, remove the <style> tags
+	module.hot.dispose(function() { update(); });
+}
+
+/***/ }),
+/* 9 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__index_less__ = __webpack_require__(18);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__index_less__ = __webpack_require__(21);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__index_less___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0__index_less__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__base_js__ = __webpack_require__(7);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__base_js__ = __webpack_require__(3);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__base_js___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1__base_js__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__ = __webpack_require__(25);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__CalenderModel__ = __webpack_require__(22);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__ = __webpack_require__(23);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__ = __webpack_require__(27);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__CalenderModel__ = __webpack_require__(24);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__ = __webpack_require__(25);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__);
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = Object.setPrototypeOf ||
@@ -224,7 +676,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 
 
-var Utils = __webpack_require__(11);
+var Utils = __webpack_require__(14);
 //const VueAwesomeSwiper = require('vue-awesome-swiper/dist/ssr');
 
 
@@ -330,6 +782,12 @@ var CalendarWeek = /** @class */ (function (_super) {
         enumerable: true,
         configurable: true
     });
+    /**
+     * 监听每天日期的状态数据变动
+     * @param {any} newVal 新值
+     * @param {any} oldVal 旧值
+     * @return {void} 无返回值
+     */
     CalendarWeek.prototype.watchDayStatusChange = function (newVal, oldVal) {
         //重置每天日期状态
         var dayStatus = [];
@@ -466,6 +924,7 @@ var CalendarWeek = /** @class */ (function (_super) {
         var beginDate = Utils.copyDate(date);
         beginDate.setDate(beginDate.getDate() - diffBeginDay);
         this.daySwiperIncludes.push(Utils.dateFormat("yyyy-MM-dd", beginDate));
+        this.weekCalender.currentMonthDate = Utils.dateFormat("yyyy-MM-dd", beginDate);
         //当前日期
         var today = Utils.dateFormat("yyyy-MM-dd", new Date());
         var defaultDay = Utils.dateFormat("yyyy-MM-dd", this.calenderOption.currentDate);
@@ -547,7 +1006,7 @@ var CalendarWeek = /** @class */ (function (_super) {
         //@ts-ignore
         this.daySwiper = this.$refs.daySwiper.swiper;
         this.daySwiper.on("slideChangeTransitionEnd", function () {
-            var date = this.slides.eq(this.activeIndex).find("div").attr("data-date");
+            var date = this.slides.eq(this.activeIndex).attr("data-date");
             if (_this.daySwiperTempDate == date) {
                 return;
             }
@@ -580,8 +1039,9 @@ var CalendarWeek = /** @class */ (function (_super) {
      */
     CalendarWeek.prototype.slidePrevTransitionEnd = function (daySwiper) {
         var _this = this;
-        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
+        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).attr("data-date");
         var chooseDate = null;
+        var chooseDayItem = null;
         for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
             var item = _a[_i];
             for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
@@ -590,9 +1050,12 @@ var CalendarWeek = /** @class */ (function (_super) {
                     continue;
                 if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
                     chooseDate = Utils.createCorrectDate(item1.currentDate);
+                    chooseDayItem = Object.assign({}, item1);
                 }
-                item1.dayDesc = item1.oriDayDesc;
-                item1.dayClass = item1.oriDayClass;
+                if (!_this.reset) {
+                    item1.dayDesc = item1.oriDayDesc;
+                    item1.dayClass = item1.oriDayClass;
+                }
             }
         }
         /*******************提前渲染上一周的日历 begin*****************/
@@ -611,27 +1074,44 @@ var CalendarWeek = /** @class */ (function (_super) {
         }
         _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
         /*******************提前渲染上一周的日历 end*****************/
-        //如果是最前一周，则显示最前一周第一天
-        //否则，原来选的是周几，则显示周几
-        chooseDate.setDate(chooseDate.getDate() - 7);
-        var chooseDay = null;
-        for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
-            var item = _e[_d];
-            for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
-                var item1 = _g[_f];
-                if (!item1.dayDesc)
-                    continue;
-                if (chooseDate >= beginDate) {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
+            //如果是最前一周，则显示最前一周第一天
+            //否则，原来选的是周几，则显示周几
+            chooseDate.setDate(chooseDate.getDate() - 7);
+            var chooseDay = null;
+            var breakCycleFlag = false;
+            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
+                var item = _e[_d];
+                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
+                    var item1 = _g[_f];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (chooseDate >= beginDate) {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+                    }
+                    else {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", beginDate);
+                    }
+                    if (item1.currentDate != chooseDay)
+                        continue;
+                    breakCycleFlag = true;
+                    item1.dayClass = "day current";
+                    _this.chooseDayItemHandle(item1, null);
+                    break;
                 }
-                else {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", beginDate);
-                }
-                if (item1.currentDate != chooseDay)
-                    continue;
-                item1.dayClass = "day current";
-                _this.chooseDayItemHandle(item1, null);
-                break;
+                if (breakCycleFlag)
+                    break;
+            }
+        }
+        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
+            var includes = {};
+            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
+            for (var i = 0; i <= 6; i++) {
+                tempBegin.setDate(tempBegin.getDate() + i);
+                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            }
+            if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
+                _this.chooseDayItemHandle(chooseDayItem, null);
             }
         }
     };
@@ -644,6 +1124,7 @@ var CalendarWeek = /** @class */ (function (_super) {
         var _this = this;
         var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
         var chooseDate = null;
+        var chooseDayItem = null;
         for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
             var item = _a[_i];
             for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
@@ -652,9 +1133,12 @@ var CalendarWeek = /** @class */ (function (_super) {
                     continue;
                 if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
                     chooseDate = Utils.createCorrectDate(item1.currentDate);
+                    chooseDayItem = Object.assign({}, item1);
                 }
-                item1.dayDesc = item1.oriDayDesc;
-                item1.dayClass = item1.oriDayClass;
+                if (!_this.reset) {
+                    item1.dayDesc = item1.oriDayDesc;
+                    item1.dayClass = item1.oriDayClass;
+                }
             }
         }
         /*******************提前渲染下一周的日历 begin*****************/
@@ -670,27 +1154,44 @@ var CalendarWeek = /** @class */ (function (_super) {
         }
         _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
         /*******************提前渲染下一周的日历 end*****************/
-        //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
-        //否则，原来选的是周几，则显示周几
-        chooseDate.setDate(chooseDate.getDate() + 7);
-        var chooseDay = null;
-        for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
-            var item = _e[_d];
-            for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
-                var item1 = _g[_f];
-                if (!item1.dayDesc)
-                    continue;
-                if (chooseDate <= endDate) {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
+            //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
+            //否则，原来选的是周几，则显示周几
+            chooseDate.setDate(chooseDate.getDate() + 7);
+            var chooseDay = null;
+            var breakCycleFlag = false;
+            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
+                var item = _e[_d];
+                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
+                    var item1 = _g[_f];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (chooseDate <= endDate) {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+                    }
+                    else {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
+                    }
+                    if (item1.currentDate != chooseDay)
+                        continue;
+                    breakCycleFlag = true;
+                    item1.dayClass = "day current";
+                    _this.chooseDayItemHandle(item1, null);
+                    break;
                 }
-                else {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
-                }
-                if (item1.currentDate != chooseDay)
-                    continue;
-                item1.dayClass = "day current";
-                _this.chooseDayItemHandle(item1, null);
-                break;
+                if (breakCycleFlag)
+                    break;
+            }
+        }
+        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
+            var includes = {};
+            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
+            for (var i = 0; i <= 6; i++) {
+                tempBegin.setDate(tempBegin.getDate() + i);
+                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            }
+            if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
+                _this.chooseDayItemHandle(chooseDayItem, null);
             }
         }
     };
@@ -711,10 +1212,11 @@ var CalendarWeek = /** @class */ (function (_super) {
      */
     CalendarWeek.prototype.chooseDayItemHandle = function (dayItem, event) {
         if (event === void 0) { event = null; }
-        this.dateDescription = dayItem.currentDate;
         if (!dayItem.currentDate || !dayItem.enabled)
             return;
         var _this = this;
+        this.dateDescription = dayItem.currentDate;
+        this.$emit("on-click", dayItem);
         //把选中的时间日期赋值给calenderChoosedModel，发送给外部调用者
         for (var _i = 0, _a = this.weekCalender.WeekDayList; _i < _a.length; _i++) {
             var item = _a[_i];
@@ -758,15 +1260,9 @@ var CalendarWeek = /** @class */ (function (_super) {
         __metadata("design:paramtypes", [String, Boolean]),
         __metadata("design:returntype", void 0)
     ], CalendarWeek.prototype, "swipeWeekCalenderSlideHandle", null);
-    __decorate([
-        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["c" /* Emit */])("on-click"),
-        __metadata("design:type", Function),
-        __metadata("design:paramtypes", [Object, Event]),
-        __metadata("design:returntype", void 0)
-    ], CalendarWeek.prototype, "chooseDayItemHandle", null);
     CalendarWeek = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["d" /* Component */])({
-            template: __webpack_require__(17),
+            template: __webpack_require__(20),
             components: {
                 swiper: __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__["swiper"],
                 swiperSlide: __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__["swiperSlide"]
@@ -784,63 +1280,18 @@ var CalendarWeek = /** @class */ (function (_super) {
 
 
 /***/ }),
-/* 7 */
-/***/ (function(module, exports) {
-
-
-(function (win) {
-	var ratio,
-	    scaleValue,
-	    renderTime,
-	    document = window.document,
-	    docElem = document.documentElement,
-	    vpm = document.querySelector('meta[name="viewport"]');
-
-	if (vpm) {
-		var tempArray = vpm.getAttribute("content").match(/initial\-scale=(["']?)([\d\.]+)\1?/);
-		if (tempArray) {
-			scaleValue = parseFloat(tempArray[2]);
-			ratio = parseInt(1 / scaleValue);
-		}
-	} else {
-		vpm = document.createElement("meta");
-		vpm.setAttribute("name", "viewport");
-		vpm.setAttribute("content", "width=device-width, initial-scale=1, user-scalable=no, minimal-ui");
-		docElem.firstElementChild.appendChild(vpm);
-	}
-
-	win.addEventListener("resize", function () {
-		clearTimeout(renderTime);
-		renderTime = setTimeout(initPage, 300);
-	}, false);
-
-	win.addEventListener("pageshow", function (e) {
-		e.persisted && (clearTimeout(renderTime), renderTime = setTimeout(initPage, 300));
-	}, false);
-
-	"complete" === document.readyState ? document.body.style.fontSize = 12 * ratio + "px" : document.addEventListener("DOMContentLoaded", function () {
-		document.body.style.fontSize = 12 * ratio + "px";
-	}, false);
-
-	initPage();
-
-	function initPage() {
-		var htmlWidth = docElem.getBoundingClientRect().width;
-		htmlWidth / ratio > 960 && (htmlWidth = 960 * ratio);
-		win.rem = htmlWidth / 10;
-		docElem.style.fontSize = win.rem + "px";
-	}
-})(window);
-
-/***/ }),
-/* 8 */
+/* 10 */
 /***/ (function(module, exports, __webpack_require__) {
+
+__webpack_require__(8);
 
 var _vue = __webpack_require__(0);
 
 var _vue2 = _interopRequireDefault(_vue);
 
-var _index = __webpack_require__(6);
+__webpack_require__(3);
+
+var _index = __webpack_require__(9);
 
 var _index2 = _interopRequireDefault(_index);
 
@@ -886,10 +1337,10 @@ new _vue2.default({
 });
 
 /***/ }),
-/* 9 */
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(2)(false);
+exports = module.exports = __webpack_require__(1)(false);
 // imports
 
 
@@ -900,12 +1351,12 @@ exports.push([module.i, "/**\n * Swiper 4.3.5\n * Most modern mobile touch slide
 
 
 /***/ }),
-/* 10 */
+/* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(2)(false);
+exports = module.exports = __webpack_require__(1)(false);
 // imports
-exports.i(__webpack_require__(9), "");
+exports.i(__webpack_require__(11), "");
 
 // module
 exports.push([module.i, "/*footer*/\n/*footer*/\n/**\n * 图片的垂直居中，注意容器不能设置float，会破坏display的效果，有需要建议在外层增加一层div包裹\n *\n * 正常使用，将该方法设置给img的父元素即可:\n *    div.pic-wrapper\n *      img\n * 若元素需要float:\n *    div.float\n *      div.pic-wrapper\n *        img\n * @param width\n * @param height\n */\n/**\n * 兼容一个参数的写法，长宽相等\n */\nhtml,\nbody {\n  height: 100%;\n  font-family: \"\\5FAE\\8F6F\\96C5\\9ED1\", \"Microsoft Yahei\", \"Hiragino Sans GB\", tahoma, arial, \"\\5B8B\\4F53\";\n  font-size: 14px;\n  user-select: none;\n}\n.calender-week-wrapper {\n  background: #ffffff;\n}\n.calender-week-wrapper .calender-month {\n  position: relative;\n  border-bottom: 1px solid #e6e6e6;\n}\n.calender-week-wrapper .calender-month .month-list .month-item {\n  width: 100%;\n  text-align: center;\n  padding: 0.37333333rem 0;\n}\n.calender-week-wrapper .calender-month .month-list .month-item .month {\n  display: inline-block;\n  font-size: 16px;\n  color: #4d5270;\n  position: relative;\n}\n.calender-week-wrapper .calender-month .month-list .month-item .month [data-dpr=\"2\"] {\n  font-size: 32px;\n}\n.calender-week-wrapper .calender-month .month-list .month-item .month [data-dpr=\"3\"] {\n  font-size: 48px;\n}\n.calender-week-wrapper .swiper-container {\n  width: 100%;\n}\n.calender-week-wrapper .calender-week {\n  *zoom: 1;\n  padding-top: 0.53333333rem;\n}\n.calender-week-wrapper .calender-week:before,\n.calender-week-wrapper .calender-week:after {\n  content: \"\";\n  display: table;\n}\n.calender-week-wrapper .calender-week:after {\n  clear: both;\n}\n.calender-week-wrapper .calender-week .week-item {\n  display: block;\n  float: left;\n  *display: inline;\n  width: 14.28%;\n  font-size: 15px;\n  color: #999;\n  text-align: center;\n}\n.calender-week-wrapper .calender-week .week-item [data-dpr=\"2\"] {\n  font-size: 30px;\n}\n.calender-week-wrapper .calender-week .week-item [data-dpr=\"3\"] {\n  font-size: 45px;\n}\n.calender-week-wrapper .calender-day {\n  margin-top: 0.24rem;\n}\n.calender-week-wrapper .calender-day .day-items {\n  *zoom: 1;\n}\n.calender-week-wrapper .calender-day .day-items:before,\n.calender-week-wrapper .calender-day .day-items:after {\n  content: \"\";\n  display: table;\n}\n.calender-week-wrapper .calender-day .day-items:after {\n  clear: both;\n}\n.calender-week-wrapper .calender-day .day-items .item {\n  float: left;\n  *display: inline;\n  width: 14.28%;\n  height: 0.93333333rem;\n  position: relative;\n  text-align: center;\n}\n.calender-week-wrapper .calender-day .day-items .item .day {\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  width: 0.85333333rem;\n  height: 0.85333333rem;\n  font-size: 15px;\n  color: #999;\n  position: absolute;\n  left: 50%;\n  top: 50%;\n  -webkit-transform: translate(-50%, -50%);\n  -moz-transform: translate(-50%, -50%);\n  -ms-transform: translate(-50%, -50%);\n  -o-transform: translate(-50%, -50%);\n  transform: translate(-50%, -50%);\n  -webkit-border-radius: 0.8533333333333334rem;\n  -webkit-background-clip: padding-box;\n  -moz-border-radius: 0.8533333333333334rem;\n  -moz-background-clip: padding;\n  border-radius: 0.8533333333333334rem;\n  background-clip: padding-box;\n}\n.calender-week-wrapper .calender-day .day-items .item .day [data-dpr=\"2\"] {\n  font-size: 30px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day [data-dpr=\"3\"] {\n  font-size: 45px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.current {\n  background: #59BBFF;\n  color: #fff !important;\n  font-size: 16px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.current [data-dpr=\"2\"] {\n  font-size: 32px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.current [data-dpr=\"3\"] {\n  font-size: 48px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.no-today {\n  width: 0.61333333rem;\n  height: 0.61333333rem;\n  line-height: 1;\n  padding: 0.13333333rem 0;\n  background: #ffb39c;\n  color: #fff;\n  font-size: 15px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.no-today [data-dpr=\"2\"] {\n  font-size: 30px;\n}\n.calender-week-wrapper .calender-day .day-items .item .day.no-today [data-dpr=\"3\"] {\n  font-size: 45px;\n}\n", ""]);
@@ -914,29 +1365,43 @@ exports.push([module.i, "/*footer*/\n/*footer*/\n/**\n * 图片的垂直居中�
 
 
 /***/ }),
-/* 11 */
+/* 13 */
 /***/ (function(module, exports, __webpack_require__) {
 
-"use strict";
+exports = module.exports = __webpack_require__(1)(false);
+// imports
 
 
-module.exports = __webpack_require__(12); 
+// module
+exports.push([module.i, "/*footer*/\n/*footer*/\n/**\n * 图片的垂直居中，注意容器不能设置float，会破坏display的效果，有需要建议在外层增加一层div包裹\n *\n * 正常使用，将该方法设置给img的父元素即可:\n *    div.pic-wrapper\n *      img\n * 若元素需要float:\n *    div.float\n *      div.pic-wrapper\n *        img\n * @param width\n * @param height\n */\n/**\n * 兼容一个参数的写法，长宽相等\n */\nhtml,\nbody {\n  height: 100%;\n  font-family: \"\\5FAE\\8F6F\\96C5\\9ED1\", \"Microsoft Yahei\", \"Hiragino Sans GB\", tahoma, arial, \"\\5B8B\\4F53\";\n  font-size: 14px;\n  user-select: none;\n}\n.calender-day .day-items .item .day {\n  color: #b8b8b8;\n}\n.calender-day .day-items .item .day.enabled {\n  color: #333 !important;\n}\n", ""]);
+
+// exports
 
 
 /***/ }),
-/* 12 */
+/* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
-var class2type = __webpack_require__(3);
-var getProto = __webpack_require__(13);
-var hasOwn = __webpack_require__(5);
-var array = __webpack_require__(1);
-var push = __webpack_require__(16);
-var indexOf = __webpack_require__(14);
-var fnToString = __webpack_require__(4);
-var objectFunctionString = __webpack_require__(15);
+
+module.exports = __webpack_require__(15); 
+
+
+/***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var class2type = __webpack_require__(4);
+var getProto = __webpack_require__(16);
+var hasOwn = __webpack_require__(6);
+var array = __webpack_require__(2);
+var push = __webpack_require__(19);
+var indexOf = __webpack_require__(17);
+var fnToString = __webpack_require__(5);
+var objectFunctionString = __webpack_require__(18);
 var types = ["Boolean", "Number", "String", "Function", "Array", "Date", "RegExp", "Object", "Error", "Symbol"];
 types.map(function (name) {
   class2type["[object " + name + "]"] = name.toLowerCase();
@@ -1391,7 +1856,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 13 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1399,47 +1864,47 @@ module.exports = {
 module.exports = Object.getPrototypeOf;
 
 /***/ }),
-/* 14 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var array = __webpack_require__(1);
-module.exports = array.indexOf;
-
-/***/ }),
-/* 15 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var fnToString = __webpack_require__(4);
-module.exports = fnToString.call(Object);
-
-/***/ }),
-/* 16 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var array = __webpack_require__(1);
-module.exports = array.push;
-
-/***/ }),
 /* 17 */
-/***/ (function(module, exports) {
+/***/ (function(module, exports, __webpack_require__) {
 
-module.exports = "<div class=\"calender-week-wrapper\">\r\n  <div ref=\"calenderMonthWrapper\" class=\"calender-month\" v-if=\"calenderOption.showHeader\">\r\n    <div class=\"month-list swiper-wrapper\">\r\n      <div class=\"month-item\">\r\n        <span class=\"month\">{{dateDescription}}</span>\r\n      </div>\r\n    </div>\r\n  </div>\r\n  <div class=\"calender-week\">\r\n    <span class=\"week-item\">日</span>\r\n    <span class=\"week-item\">一</span>\r\n    <span class=\"week-item\">二</span>\r\n    <span class=\"week-item\">三</span>\r\n    <span class=\"week-item\">四</span>\r\n    <span class=\"week-item\">五</span>\r\n    <span class=\"week-item\">六</span>\r\n  </div>\r\n  {{calendarOptionComputed}} {{calenderDayStatusComputed}}\r\n  <swiper class=\"calender-day\" :options=\"daySwiperOption\" ref=\"daySwiper\">\r\n    <swiper-slide v-for=\"weekCalender in weekCalender.WeekDayList\" class=\"day-items swiper-slide\">\r\n      <div v-for=\"item in weekCalender.dayList\" :data-date=\"item.currentDate\" class=\"item\">\r\n        <span v-on:click=\"chooseDayItemHandle(item,$event)\" :class=\"item.dayClass\">{{item.dayDesc}}</span>\r\n      </div>\r\n    </swiper-slide>\r\n\r\n  </swiper>\r\n</div>";
+"use strict";
+
+var array = __webpack_require__(2);
+module.exports = array.indexOf;
 
 /***/ }),
 /* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
+"use strict";
+
+
+var fnToString = __webpack_require__(5);
+module.exports = fnToString.call(Object);
+
+/***/ }),
+/* 19 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+var array = __webpack_require__(2);
+module.exports = array.push;
+
+/***/ }),
+/* 20 */
+/***/ (function(module, exports) {
+
+module.exports = "<div class=\"calender-week-wrapper\">\r\n  <div ref=\"calenderMonthWrapper\" class=\"calender-month\" v-if=\"calenderOption.showHeader\">\r\n    <div class=\"month-list swiper-wrapper\">\r\n      <div class=\"month-item\">\r\n        <span class=\"month\">{{dateDescription}}</span>\r\n      </div>\r\n    </div>\r\n  </div>\r\n  <div class=\"calender-week\">\r\n    <span class=\"week-item\">日</span>\r\n    <span class=\"week-item\">一</span>\r\n    <span class=\"week-item\">二</span>\r\n    <span class=\"week-item\">三</span>\r\n    <span class=\"week-item\">四</span>\r\n    <span class=\"week-item\">五</span>\r\n    <span class=\"week-item\">六</span>\r\n  </div>\r\n  {{calendarOptionComputed}} {{calenderDayStatusComputed}}\r\n  <swiper class=\"calender-day\" :options=\"daySwiperOption\" ref=\"daySwiper\">\r\n    <swiper-slide v-for=\"weekCalender in weekCalender.WeekDayList\" data-date=\"weekCalender.currentMonthDate\" class=\"day-items swiper-slide\">\r\n      <div v-for=\"item in weekCalender.dayList\" :data-date=\"item.currentDate\" class=\"item\">\r\n        <span v-on:click=\"chooseDayItemHandle(item,$event)\" :class=\"item.dayClass\">{{item.dayDesc}}</span>\r\n      </div>\r\n    </swiper-slide>\r\n\r\n  </swiper>\r\n</div>";
+
+/***/ }),
+/* 21 */
+/***/ (function(module, exports, __webpack_require__) {
+
 // style-loader: Adds some css to the DOM by adding a <style> tag
 
 // load the styles
-var content = __webpack_require__(10);
+var content = __webpack_require__(12);
 if(typeof content === 'string') content = [[module.i, content, '']];
 // Prepare cssTransformation
 var transform;
@@ -1447,7 +1912,7 @@ var transform;
 var options = {"hmr":true}
 options.transform = transform
 // add the styles to the DOM
-var update = __webpack_require__(19)(content, options);
+var update = __webpack_require__(7)(content, options);
 if(content.locals) module.exports = content.locals;
 // Hot Module Replacement
 if(false) {
@@ -1464,379 +1929,7 @@ if(false) {
 }
 
 /***/ }),
-/* 19 */
-/***/ (function(module, exports, __webpack_require__) {
-
-/*
-	MIT License http://www.opensource.org/licenses/mit-license.php
-	Author Tobias Koppers @sokra
-*/
-
-var stylesInDom = {};
-
-var	memoize = function (fn) {
-	var memo;
-
-	return function () {
-		if (typeof memo === "undefined") memo = fn.apply(this, arguments);
-		return memo;
-	};
-};
-
-var isOldIE = memoize(function () {
-	// Test for IE <= 9 as proposed by Browserhacks
-	// @see http://browserhacks.com/#hack-e71d8692f65334173fee715c222cb805
-	// Tests for existence of standard globals is to allow style-loader
-	// to operate correctly into non-standard environments
-	// @see https://github.com/webpack-contrib/style-loader/issues/177
-	return window && document && document.all && !window.atob;
-});
-
-var getElement = (function (fn) {
-	var memo = {};
-
-	return function(selector) {
-		if (typeof memo[selector] === "undefined") {
-			var styleTarget = fn.call(this, selector);
-			// Special case to return head of iframe instead of iframe itself
-			if (styleTarget instanceof window.HTMLIFrameElement) {
-				try {
-					// This will throw an exception if access to iframe is blocked
-					// due to cross-origin restrictions
-					styleTarget = styleTarget.contentDocument.head;
-				} catch(e) {
-					styleTarget = null;
-				}
-			}
-			memo[selector] = styleTarget;
-		}
-		return memo[selector]
-	};
-})(function (target) {
-	return document.querySelector(target)
-});
-
-var singleton = null;
-var	singletonCounter = 0;
-var	stylesInsertedAtTop = [];
-
-var	fixUrls = __webpack_require__(20);
-
-module.exports = function(list, options) {
-	if (typeof DEBUG !== "undefined" && DEBUG) {
-		if (typeof document !== "object") throw new Error("The style-loader cannot be used in a non-browser environment");
-	}
-
-	options = options || {};
-
-	options.attrs = typeof options.attrs === "object" ? options.attrs : {};
-
-	// Force single-tag solution on IE6-9, which has a hard limit on the # of <style>
-	// tags it will allow on a page
-	if (!options.singleton && typeof options.singleton !== "boolean") options.singleton = isOldIE();
-
-	// By default, add <style> tags to the <head> element
-	if (!options.insertInto) options.insertInto = "head";
-
-	// By default, add <style> tags to the bottom of the target
-	if (!options.insertAt) options.insertAt = "bottom";
-
-	var styles = listToStyles(list, options);
-
-	addStylesToDom(styles, options);
-
-	return function update (newList) {
-		var mayRemove = [];
-
-		for (var i = 0; i < styles.length; i++) {
-			var item = styles[i];
-			var domStyle = stylesInDom[item.id];
-
-			domStyle.refs--;
-			mayRemove.push(domStyle);
-		}
-
-		if(newList) {
-			var newStyles = listToStyles(newList, options);
-			addStylesToDom(newStyles, options);
-		}
-
-		for (var i = 0; i < mayRemove.length; i++) {
-			var domStyle = mayRemove[i];
-
-			if(domStyle.refs === 0) {
-				for (var j = 0; j < domStyle.parts.length; j++) domStyle.parts[j]();
-
-				delete stylesInDom[domStyle.id];
-			}
-		}
-	};
-};
-
-function addStylesToDom (styles, options) {
-	for (var i = 0; i < styles.length; i++) {
-		var item = styles[i];
-		var domStyle = stylesInDom[item.id];
-
-		if(domStyle) {
-			domStyle.refs++;
-
-			for(var j = 0; j < domStyle.parts.length; j++) {
-				domStyle.parts[j](item.parts[j]);
-			}
-
-			for(; j < item.parts.length; j++) {
-				domStyle.parts.push(addStyle(item.parts[j], options));
-			}
-		} else {
-			var parts = [];
-
-			for(var j = 0; j < item.parts.length; j++) {
-				parts.push(addStyle(item.parts[j], options));
-			}
-
-			stylesInDom[item.id] = {id: item.id, refs: 1, parts: parts};
-		}
-	}
-}
-
-function listToStyles (list, options) {
-	var styles = [];
-	var newStyles = {};
-
-	for (var i = 0; i < list.length; i++) {
-		var item = list[i];
-		var id = options.base ? item[0] + options.base : item[0];
-		var css = item[1];
-		var media = item[2];
-		var sourceMap = item[3];
-		var part = {css: css, media: media, sourceMap: sourceMap};
-
-		if(!newStyles[id]) styles.push(newStyles[id] = {id: id, parts: [part]});
-		else newStyles[id].parts.push(part);
-	}
-
-	return styles;
-}
-
-function insertStyleElement (options, style) {
-	var target = getElement(options.insertInto)
-
-	if (!target) {
-		throw new Error("Couldn't find a style target. This probably means that the value for the 'insertInto' parameter is invalid.");
-	}
-
-	var lastStyleElementInsertedAtTop = stylesInsertedAtTop[stylesInsertedAtTop.length - 1];
-
-	if (options.insertAt === "top") {
-		if (!lastStyleElementInsertedAtTop) {
-			target.insertBefore(style, target.firstChild);
-		} else if (lastStyleElementInsertedAtTop.nextSibling) {
-			target.insertBefore(style, lastStyleElementInsertedAtTop.nextSibling);
-		} else {
-			target.appendChild(style);
-		}
-		stylesInsertedAtTop.push(style);
-	} else if (options.insertAt === "bottom") {
-		target.appendChild(style);
-	} else if (typeof options.insertAt === "object" && options.insertAt.before) {
-		var nextSibling = getElement(options.insertInto + " " + options.insertAt.before);
-		target.insertBefore(style, nextSibling);
-	} else {
-		throw new Error("[Style Loader]\n\n Invalid value for parameter 'insertAt' ('options.insertAt') found.\n Must be 'top', 'bottom', or Object.\n (https://github.com/webpack-contrib/style-loader#insertat)\n");
-	}
-}
-
-function removeStyleElement (style) {
-	if (style.parentNode === null) return false;
-	style.parentNode.removeChild(style);
-
-	var idx = stylesInsertedAtTop.indexOf(style);
-	if(idx >= 0) {
-		stylesInsertedAtTop.splice(idx, 1);
-	}
-}
-
-function createStyleElement (options) {
-	var style = document.createElement("style");
-
-	options.attrs.type = "text/css";
-
-	addAttrs(style, options.attrs);
-	insertStyleElement(options, style);
-
-	return style;
-}
-
-function createLinkElement (options) {
-	var link = document.createElement("link");
-
-	options.attrs.type = "text/css";
-	options.attrs.rel = "stylesheet";
-
-	addAttrs(link, options.attrs);
-	insertStyleElement(options, link);
-
-	return link;
-}
-
-function addAttrs (el, attrs) {
-	Object.keys(attrs).forEach(function (key) {
-		el.setAttribute(key, attrs[key]);
-	});
-}
-
-function addStyle (obj, options) {
-	var style, update, remove, result;
-
-	// If a transform function was defined, run it on the css
-	if (options.transform && obj.css) {
-	    result = options.transform(obj.css);
-
-	    if (result) {
-	    	// If transform returns a value, use that instead of the original css.
-	    	// This allows running runtime transformations on the css.
-	    	obj.css = result;
-	    } else {
-	    	// If the transform function returns a falsy value, don't add this css.
-	    	// This allows conditional loading of css
-	    	return function() {
-	    		// noop
-	    	};
-	    }
-	}
-
-	if (options.singleton) {
-		var styleIndex = singletonCounter++;
-
-		style = singleton || (singleton = createStyleElement(options));
-
-		update = applyToSingletonTag.bind(null, style, styleIndex, false);
-		remove = applyToSingletonTag.bind(null, style, styleIndex, true);
-
-	} else if (
-		obj.sourceMap &&
-		typeof URL === "function" &&
-		typeof URL.createObjectURL === "function" &&
-		typeof URL.revokeObjectURL === "function" &&
-		typeof Blob === "function" &&
-		typeof btoa === "function"
-	) {
-		style = createLinkElement(options);
-		update = updateLink.bind(null, style, options);
-		remove = function () {
-			removeStyleElement(style);
-
-			if(style.href) URL.revokeObjectURL(style.href);
-		};
-	} else {
-		style = createStyleElement(options);
-		update = applyToTag.bind(null, style);
-		remove = function () {
-			removeStyleElement(style);
-		};
-	}
-
-	update(obj);
-
-	return function updateStyle (newObj) {
-		if (newObj) {
-			if (
-				newObj.css === obj.css &&
-				newObj.media === obj.media &&
-				newObj.sourceMap === obj.sourceMap
-			) {
-				return;
-			}
-
-			update(obj = newObj);
-		} else {
-			remove();
-		}
-	};
-}
-
-var replaceText = (function () {
-	var textStore = [];
-
-	return function (index, replacement) {
-		textStore[index] = replacement;
-
-		return textStore.filter(Boolean).join('\n');
-	};
-})();
-
-function applyToSingletonTag (style, index, remove, obj) {
-	var css = remove ? "" : obj.css;
-
-	if (style.styleSheet) {
-		style.styleSheet.cssText = replaceText(index, css);
-	} else {
-		var cssNode = document.createTextNode(css);
-		var childNodes = style.childNodes;
-
-		if (childNodes[index]) style.removeChild(childNodes[index]);
-
-		if (childNodes.length) {
-			style.insertBefore(cssNode, childNodes[index]);
-		} else {
-			style.appendChild(cssNode);
-		}
-	}
-}
-
-function applyToTag (style, obj) {
-	var css = obj.css;
-	var media = obj.media;
-
-	if(media) {
-		style.setAttribute("media", media)
-	}
-
-	if(style.styleSheet) {
-		style.styleSheet.cssText = css;
-	} else {
-		while(style.firstChild) {
-			style.removeChild(style.firstChild);
-		}
-
-		style.appendChild(document.createTextNode(css));
-	}
-}
-
-function updateLink (link, options, obj) {
-	var css = obj.css;
-	var sourceMap = obj.sourceMap;
-
-	/*
-		If convertToAbsoluteUrls isn't defined, but sourcemaps are enabled
-		and there is no publicPath defined then lets turn convertToAbsoluteUrls
-		on by default.  Otherwise default to the convertToAbsoluteUrls option
-		directly
-	*/
-	var autoFixUrls = options.convertToAbsoluteUrls === undefined && sourceMap;
-
-	if (options.convertToAbsoluteUrls || autoFixUrls) {
-		css = fixUrls(css);
-	}
-
-	if (sourceMap) {
-		// http://stackoverflow.com/a/26603875
-		css += "\n/*# sourceMappingURL=data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(sourceMap)))) + " */";
-	}
-
-	var blob = new Blob([css], { type: "text/css" });
-
-	var oldSrc = link.href;
-
-	link.href = URL.createObjectURL(blob);
-
-	if(oldSrc) URL.revokeObjectURL(oldSrc);
-}
-
-
-/***/ }),
-/* 20 */
+/* 22 */
 /***/ (function(module, exports) {
 
 
@@ -1931,7 +2024,7 @@ module.exports = function (css) {
 
 
 /***/ }),
-/* 21 */
+/* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -9677,7 +9770,7 @@ module.exports = function (css) {
 
 
 /***/ }),
-/* 22 */
+/* 24 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -9752,13 +9845,13 @@ var Calender;
 
 
 /***/ }),
-/* 23 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
-!function(e,t){ true?module.exports=t(__webpack_require__(21)):"function"==typeof define&&define.amd?define("VueAwesomeSwiper",["swiper"],t):"object"==typeof exports?exports.VueAwesomeSwiper=t(require("swiper/dist/js/swiper.js")):e.VueAwesomeSwiper=t(e.Swiper)}(this,function(e){return function(e){function t(i){if(n[i])return n[i].exports;var s=n[i]={i:i,l:!1,exports:{}};return e[i].call(s.exports,s,s.exports,t),s.l=!0,s.exports}var n={};return t.m=e,t.c=n,t.i=function(e){return e},t.d=function(e,n,i){t.o(e,n)||Object.defineProperty(e,n,{configurable:!1,enumerable:!0,get:i})},t.n=function(e){var n=e&&e.__esModule?function(){return e.default}:function(){return e};return t.d(n,"a",n),n},t.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},t.p="/",t(t.s=4)}([function(t,n){t.exports=e},function(e,t){e.exports=function(e,t,n,i,s,r){var o,a=e=e||{},u=typeof e.default;"object"!==u&&"function"!==u||(o=e,a=e.default);var p="function"==typeof a?a.options:a;t&&(p.render=t.render,p.staticRenderFns=t.staticRenderFns,p._compiled=!0),n&&(p.functional=!0),s&&(p._scopeId=s);var l;if(r?(l=function(e){e=e||this.$vnode&&this.$vnode.ssrContext||this.parent&&this.parent.$vnode&&this.parent.$vnode.ssrContext,e||"undefined"==typeof __VUE_SSR_CONTEXT__||(e=__VUE_SSR_CONTEXT__),i&&i.call(this,e),e&&e._registeredComponents&&e._registeredComponents.add(r)},p._ssrRegister=l):i&&(l=i),l){var c=p.functional,d=c?p.render:p.beforeCreate;c?(p._injectStyles=l,p.render=function(e,t){return l.call(t),d(e,t)}):p.beforeCreate=d?[].concat(d,l):[l]}return{esModule:o,exports:a,options:p}}},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(5),s=n.n(i),r=n(8),o=n(1),a=o(s.a,r.a,!1,null,null,null);t.default=a.exports},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(6),s=n.n(i),r=n(7),o=n(1),a=o(s.a,r.a,!1,null,null,null);t.default=a.exports},function(e,t,n){"use strict";function i(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0}),t.install=t.swiperSlide=t.swiper=t.Swiper=void 0;var s=n(0),r=i(s),o=n(2),a=i(o),u=n(3),p=i(u),l=window.Swiper||r.default,c=p.default,d=a.default,f=function(e,t){t&&(p.default.props.globalOptions.default=function(){return t}),e.component(p.default.name,p.default),e.component(a.default.name,a.default)},h={Swiper:l,swiper:c,swiperSlide:d,install:f};t.default=h,t.Swiper=l,t.swiper=c,t.swiperSlide=d,t.install=f},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default={name:"swiper-slide",data:function(){return{slideClass:"swiper-slide"}},ready:function(){this.update()},mounted:function(){this.update(),this.$parent&&this.$parent.options&&this.$parent.options.slideClass&&(this.slideClass=this.$parent.options.slideClass)},updated:function(){this.update()},attached:function(){this.update()},methods:{update:function(){this.$parent&&this.$parent.swiper&&this.$parent.update()}}}},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(0),s=function(e){return e&&e.__esModule?e:{default:e}}(i),r=window.Swiper||s.default;"function"!=typeof Object.assign&&Object.defineProperty(Object,"assign",{value:function(e,t){if(null==e)throw new TypeError("Cannot convert undefined or null to object");for(var n=Object(e),i=1;i<arguments.length;i++){var s=arguments[i];if(null!=s)for(var r in s)Object.prototype.hasOwnProperty.call(s,r)&&(n[r]=s[r])}return n},writable:!0,configurable:!0});var o=["beforeDestroy","slideChange","slideChangeTransitionStart","slideChangeTransitionEnd","slideNextTransitionStart","slideNextTransitionEnd","slidePrevTransitionStart","slidePrevTransitionEnd","transitionStart","transitionEnd","touchStart","touchMove","touchMoveOpposite","sliderMove","touchEnd","click","tap","doubleTap","imagesReady","progress","reachBeginning","reachEnd","fromEdge","setTranslate","setTransition","resize"];t.default={name:"swiper",props:{options:{type:Object,default:function(){return{}}},globalOptions:{type:Object,required:!1,default:function(){return{}}}},data:function(){return{swiper:null,classes:{wrapperClass:"swiper-wrapper"}}},ready:function(){this.swiper||this.mountInstance()},mounted:function(){if(!this.swiper){var e=!1;for(var t in this.classes)this.classes.hasOwnProperty(t)&&this.options[t]&&(e=!0,this.classes[t]=this.options[t]);e?this.$nextTick(this.mountInstance):this.mountInstance()}},activated:function(){this.update()},updated:function(){this.update()},beforeDestroy:function(){this.$nextTick(function(){this.swiper&&(this.swiper.destroy&&this.swiper.destroy(),delete this.swiper)})},methods:{update:function(){this.swiper&&(this.swiper.update&&this.swiper.update(),this.swiper.navigation&&this.swiper.navigation.update(),this.swiper.pagination&&this.swiper.pagination.render(),this.swiper.pagination&&this.swiper.pagination.update())},mountInstance:function(){var e=Object.assign({},this.globalOptions,this.options);this.swiper=new r(this.$el,e),this.bindEvents(),this.$emit("ready",this.swiper)},bindEvents:function(){var e=this,t=this;o.forEach(function(n){e.swiper.on(n,function(){t.$emit.apply(t,[n].concat(Array.prototype.slice.call(arguments))),t.$emit.apply(t,[n.replace(/([A-Z])/g,"-$1").toLowerCase()].concat(Array.prototype.slice.call(arguments)))})})}}}},function(e,t,n){"use strict";var i=function(){var e=this,t=e.$createElement,n=e._self._c||t;return n("div",{staticClass:"swiper-container"},[e._t("parallax-bg"),e._v(" "),n("div",{class:e.classes.wrapperClass},[e._t("default")],2),e._v(" "),e._t("pagination"),e._v(" "),e._t("button-prev"),e._v(" "),e._t("button-next"),e._v(" "),e._t("scrollbar")],2)},s=[],r={render:i,staticRenderFns:s};t.a=r},function(e,t,n){"use strict";var i=function(){var e=this,t=e.$createElement;return(e._self._c||t)("div",{class:e.slideClass},[e._t("default")],2)},s=[],r={render:i,staticRenderFns:s};t.a=r}])});
+!function(e,t){ true?module.exports=t(__webpack_require__(23)):"function"==typeof define&&define.amd?define("VueAwesomeSwiper",["swiper"],t):"object"==typeof exports?exports.VueAwesomeSwiper=t(require("swiper/dist/js/swiper.js")):e.VueAwesomeSwiper=t(e.Swiper)}(this,function(e){return function(e){function t(i){if(n[i])return n[i].exports;var s=n[i]={i:i,l:!1,exports:{}};return e[i].call(s.exports,s,s.exports,t),s.l=!0,s.exports}var n={};return t.m=e,t.c=n,t.i=function(e){return e},t.d=function(e,n,i){t.o(e,n)||Object.defineProperty(e,n,{configurable:!1,enumerable:!0,get:i})},t.n=function(e){var n=e&&e.__esModule?function(){return e.default}:function(){return e};return t.d(n,"a",n),n},t.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},t.p="/",t(t.s=4)}([function(t,n){t.exports=e},function(e,t){e.exports=function(e,t,n,i,s,r){var o,a=e=e||{},u=typeof e.default;"object"!==u&&"function"!==u||(o=e,a=e.default);var p="function"==typeof a?a.options:a;t&&(p.render=t.render,p.staticRenderFns=t.staticRenderFns,p._compiled=!0),n&&(p.functional=!0),s&&(p._scopeId=s);var l;if(r?(l=function(e){e=e||this.$vnode&&this.$vnode.ssrContext||this.parent&&this.parent.$vnode&&this.parent.$vnode.ssrContext,e||"undefined"==typeof __VUE_SSR_CONTEXT__||(e=__VUE_SSR_CONTEXT__),i&&i.call(this,e),e&&e._registeredComponents&&e._registeredComponents.add(r)},p._ssrRegister=l):i&&(l=i),l){var c=p.functional,d=c?p.render:p.beforeCreate;c?(p._injectStyles=l,p.render=function(e,t){return l.call(t),d(e,t)}):p.beforeCreate=d?[].concat(d,l):[l]}return{esModule:o,exports:a,options:p}}},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(5),s=n.n(i),r=n(8),o=n(1),a=o(s.a,r.a,!1,null,null,null);t.default=a.exports},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(6),s=n.n(i),r=n(7),o=n(1),a=o(s.a,r.a,!1,null,null,null);t.default=a.exports},function(e,t,n){"use strict";function i(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"__esModule",{value:!0}),t.install=t.swiperSlide=t.swiper=t.Swiper=void 0;var s=n(0),r=i(s),o=n(2),a=i(o),u=n(3),p=i(u),l=window.Swiper||r.default,c=p.default,d=a.default,f=function(e,t){t&&(p.default.props.globalOptions.default=function(){return t}),e.component(p.default.name,p.default),e.component(a.default.name,a.default)},h={Swiper:l,swiper:c,swiperSlide:d,install:f};t.default=h,t.Swiper=l,t.swiper=c,t.swiperSlide=d,t.install=f},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default={name:"swiper-slide",data:function(){return{slideClass:"swiper-slide"}},ready:function(){this.update()},mounted:function(){this.update(),this.$parent&&this.$parent.options&&this.$parent.options.slideClass&&(this.slideClass=this.$parent.options.slideClass)},updated:function(){this.update()},attached:function(){this.update()},methods:{update:function(){this.$parent&&this.$parent.swiper&&this.$parent.update()}}}},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var i=n(0),s=function(e){return e&&e.__esModule?e:{default:e}}(i),r=window.Swiper||s.default;"function"!=typeof Object.assign&&Object.defineProperty(Object,"assign",{value:function(e,t){if(null==e)throw new TypeError("Cannot convert undefined or null to object");for(var n=Object(e),i=1;i<arguments.length;i++){var s=arguments[i];if(null!=s)for(var r in s)Object.prototype.hasOwnProperty.call(s,r)&&(n[r]=s[r])}return n},writable:!0,configurable:!0});var o=["beforeDestroy","slideChange","slideChangeTransitionStart","slideChangeTransitionEnd","slideNextTransitionStart","slideNextTransitionEnd","slidePrevTransitionStart","slidePrevTransitionEnd","transitionStart","transitionEnd","touchStart","touchMove","touchMoveOpposite","sliderMove","touchEnd","click","tap","doubleTap","imagesReady","progress","reachBeginning","reachEnd","fromEdge","setTranslate","setTransition","resize"];t.default={name:"swiper",props:{options:{type:Object,default:function(){return{}}},globalOptions:{type:Object,required:!1,default:function(){return{}}}},data:function(){return{swiper:null,classes:{wrapperClass:"swiper-wrapper"}}},ready:function(){this.swiper||this.mountInstance()},mounted:function(){if(!this.swiper){var e=!1;for(var t in this.classes)this.classes.hasOwnProperty(t)&&this.options[t]&&(e=!0,this.classes[t]=this.options[t]);e?this.$nextTick(this.mountInstance):this.mountInstance()}},activated:function(){this.update()},updated:function(){this.update()},beforeDestroy:function(){this.$nextTick(function(){this.swiper&&(this.swiper.destroy&&this.swiper.destroy(),delete this.swiper)})},methods:{update:function(){this.swiper&&(this.swiper.update&&this.swiper.update(),this.swiper.navigation&&this.swiper.navigation.update(),this.swiper.pagination&&this.swiper.pagination.render(),this.swiper.pagination&&this.swiper.pagination.update())},mountInstance:function(){var e=Object.assign({},this.globalOptions,this.options);this.swiper=new r(this.$el,e),this.bindEvents(),this.$emit("ready",this.swiper)},bindEvents:function(){var e=this,t=this;o.forEach(function(n){e.swiper.on(n,function(){t.$emit.apply(t,[n].concat(Array.prototype.slice.call(arguments))),t.$emit.apply(t,[n.replace(/([A-Z])/g,"-$1").toLowerCase()].concat(Array.prototype.slice.call(arguments)))})})}}}},function(e,t,n){"use strict";var i=function(){var e=this,t=e.$createElement,n=e._self._c||t;return n("div",{staticClass:"swiper-container"},[e._t("parallax-bg"),e._v(" "),n("div",{class:e.classes.wrapperClass},[e._t("default")],2),e._v(" "),e._t("pagination"),e._v(" "),e._t("button-prev"),e._v(" "),e._t("button-next"),e._v(" "),e._t("scrollbar")],2)},s=[],r={render:i,staticRenderFns:s};t.a=r},function(e,t,n){"use strict";var i=function(){var e=this,t=e.$createElement;return(e._self._c||t)("div",{class:e.slideClass},[e._t("default")],2)},s=[],r={render:i,staticRenderFns:s};t.a=r}])});
 
 /***/ }),
-/* 24 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -9995,7 +10088,7 @@ exports.mixins = mixins;
 
 
 /***/ }),
-/* 25 */
+/* 27 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -10007,7 +10100,7 @@ exports.mixins = mixins;
 /* harmony export (immutable) */ __webpack_exports__["c"] = Emit;
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue__ = __webpack_require__(0);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_vue__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_vue_class_component__ = __webpack_require__(24);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_vue_class_component__ = __webpack_require__(26);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_vue_class_component___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1_vue_class_component__);
 /* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "d", function() { return __WEBPACK_IMPORTED_MODULE_1_vue_class_component___default.a; });
 /* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "e", function() { return __WEBPACK_IMPORTED_MODULE_0_vue___default.a; });

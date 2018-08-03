@@ -10,6 +10,8 @@ export namespace Calender {
    */
   export class WeekCalender {
 
+    currentMonthDate: string;
+
     /**
      * 总共有多少周的日期集合
      */

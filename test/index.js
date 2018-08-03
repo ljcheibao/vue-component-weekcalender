@@ -1,4 +1,6 @@
+import "./index.less";
 import Vue from 'vue';
+import "../src/base.js";
 import VueWeekcalender from "../src/index.ts";
 
 new Vue({
