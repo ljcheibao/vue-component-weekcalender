@@ -10,12 +10,15 @@ export namespace Calender {
    */
   export class WeekCalender {
 
-    currentMonthDate: string;
-
     /**
      * 总共有多少周的日期集合
      */
     WeekDayList: Array<{
+      
+      /**
+       * 当前日期，格式为：yyyy-MM-dd，主要记录每一个slide块的第一个日期
+       */
+      currentMonthDate: string;
 
       /**
        * 每一天的日历数据列表

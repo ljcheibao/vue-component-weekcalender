@@ -14,7 +14,7 @@ new Vue({
         showHeader: true,
         beginDate: "2018-08-01",
         endDate: "2018-08-16",
-        currentDate: "2018-08-03"
+        currentDate: "2018-08-04"
       },
       reset: true,
       dayStatus: [{
@@ -31,6 +31,21 @@ new Vue({
     }
   },
   methods: {
+
+    changeStatus:function() {
+      this.dayStatus= [{
+        currentDate: "2018-08-04",
+        dayClass: "day enabled",
+        enabled: true,
+        default: true
+      }, {
+        currentDate: "2018-08-14",
+        dayClass: "day enabled",
+        enabled: true,
+        default: false
+      }]
+    },
+    
     chooseDayItemHandle: function (dayItem) {
       console.log(dayItem)
     },
