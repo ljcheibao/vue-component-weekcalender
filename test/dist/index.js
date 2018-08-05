@@ -887,6 +887,7 @@ var CalendarWeek = /** @class */ (function (_super) {
                         else {
                             item2.dayClass = "day current";
                         }
+                        this.chooseDayItemHandle(item2, null);
                     }
                 }
             }
@@ -902,7 +903,6 @@ var CalendarWeek = /** @class */ (function (_super) {
                 }
             }
             var activeIndex = index / 7;
-            console.log("this is swiper index==========" + activeIndex);
             this.daySwiper.slideTo(activeIndex, 300);
         }
     };
@@ -931,10 +931,10 @@ var CalendarWeek = /** @class */ (function (_super) {
         //要重置的日期最大的一天不在生成的slide块里面，则按照
         //当前的重置的currentDate为基准，重新生成日历的slide块
         if (!isDayExistSlide) {
-            console.log("rebuild weekcalender,current date is ==" + this.calenderOption.currentDate);
             //重新生成日历
             this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
         }
+        this.resetDayStatus(dayStatus);
     };
     /**
      * 初始化周日历组件相关配置数据
@@ -975,7 +975,6 @@ var CalendarWeek = /** @class */ (function (_super) {
         //当前日期
         var today = Utils.dateFormat("yyyy-MM-dd", new Date());
         var defaultDay = Utils.dateFormat("yyyy-MM-dd", this.calenderOption.currentDate);
-        console.log("this is default current date =====" + defaultDay);
         for (var i = 0; i <= 6; i++) {
             var tempDate1 = Utils.copyDate(beginDate);
             tempDate1.setDate(tempDate1.getDate() + i);
@@ -1180,13 +1179,15 @@ var CalendarWeek = /** @class */ (function (_super) {
                     chooseDayItem.enabled = item.enabled;
                     chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
                     chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    _this.chooseDayItemHandle(chooseDayItem, null);
+                    break;
                 }
                 else {
                     item.default = false;
                 }
             }
-            _this.resetDayStatus(_this.dayStatus);
-            _this.chooseDayItemHandle(chooseDayItem, null);
+            //_this.resetDayStatus(_this.dayStatus);
+            //_this.chooseDayItemHandle(chooseDayItem, null);
             // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
             //   _this.chooseDayItemHandle(chooseDayItem, null);
             // } else {//选中第一天
@@ -1285,13 +1286,15 @@ var CalendarWeek = /** @class */ (function (_super) {
                     chooseDayItem.enabled = item.enabled;
                     chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
                     chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    _this.chooseDayItemHandle(chooseDayItem, null);
+                    break;
                 }
                 else {
                     item.default = false;
                 }
             }
-            _this.resetDayStatus(_this.dayStatus);
-            _this.chooseDayItemHandle(chooseDayItem, null);
+            //_this.resetDayStatus(_this.dayStatus);
+            // _this.chooseDayItemHandle(chooseDayItem, null);
             // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
             //   _this.chooseDayItemHandle(chooseDayItem, null);
             // } else {//选中第一天

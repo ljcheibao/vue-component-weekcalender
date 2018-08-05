@@ -252,6 +252,7 @@ export default class CalendarWeek extends Vue {
             } else {
               item2.dayClass = "day current";
             }
+            this.chooseDayItemHandle(item2, null);
           }
         }
       }
@@ -267,7 +268,6 @@ export default class CalendarWeek extends Vue {
         }
       }
       let activeIndex = index / 7;
-      console.log("this is swiper index==========" + activeIndex);
       this.daySwiper.slideTo(activeIndex, 300);
     }
   }
@@ -294,13 +294,14 @@ export default class CalendarWeek extends Vue {
         }
       }
     }
+    console.log("this is isDayExistSlide ======= " + isDayExistSlide);
     //要重置的日期最大的一天不在生成的slide块里面，则按照
     //当前的重置的currentDate为基准，重新生成日历的slide块
     if (!isDayExistSlide) {
-      console.log("rebuild weekcalender,current date is ==" + this.calenderOption.currentDate);
       //重新生成日历
       this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
     }
+    this.resetDayStatus(dayStatus);
   }
 
   /**
@@ -342,7 +343,6 @@ export default class CalendarWeek extends Vue {
     //当前日期
     let today: string = Utils.dateFormat("yyyy-MM-dd", new Date());
     let defaultDay: string = Utils.dateFormat("yyyy-MM-dd", this.calenderOption.currentDate);
-    console.log("this is default current date =====" + defaultDay);
     for (let i = 0; i <= 6; i++) {
       let tempDate1: Date = Utils.copyDate(beginDate);
       tempDate1.setDate(tempDate1.getDate() + i);
@@ -542,12 +542,14 @@ export default class CalendarWeek extends Vue {
           chooseDayItem.enabled = item.enabled;
           chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
           chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          _this.chooseDayItemHandle(chooseDayItem, null);
+          break;
         } else {
           item.default = false;
         }
       }
-      _this.resetDayStatus(_this.dayStatus);
-      _this.chooseDayItemHandle(chooseDayItem, null);
+      //_this.resetDayStatus(_this.dayStatus);
+      //_this.chooseDayItemHandle(chooseDayItem, null);
 
       // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
       //   _this.chooseDayItemHandle(chooseDayItem, null);
@@ -642,12 +644,14 @@ export default class CalendarWeek extends Vue {
           chooseDayItem.enabled = item.enabled;
           chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
           chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          _this.chooseDayItemHandle(chooseDayItem, null);
+          break;
         } else {
           item.default = false;
         }
       }
-      _this.resetDayStatus(_this.dayStatus);
-      _this.chooseDayItemHandle(chooseDayItem, null);
+      //_this.resetDayStatus(_this.dayStatus);
+      // _this.chooseDayItemHandle(chooseDayItem, null);
 
       // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
       //   _this.chooseDayItemHandle(chooseDayItem, null);
