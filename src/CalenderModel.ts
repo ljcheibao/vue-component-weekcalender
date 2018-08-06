@@ -130,5 +130,10 @@ export namespace Calender {
      * 每天日历是否可用(点击)
      */
     enabled: boolean = true;
+
+    /**
+     * 每天日历是否可用(点击)
+     */
+    oriEnabled: boolean = true;
   }
 }

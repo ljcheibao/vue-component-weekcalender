@@ -24,10 +24,14 @@ import { swiper, swiperSlide } from 'vue-awesome-swiper';
 
 /**
  * 周日历组件
+ * 日历的生成标准是以默认选中的currentDate为基准
+ * 生成当前currentDate所在的一周数据、上一周数组、下一周数据
  * @class
  * @extends {Vue}
  */
 export default class CalendarWeek extends Vue {
+
+  private slideToFlag: boolean = false;
 
   //滑动的时候记录原来选中的日期
   private swiperChooseDate: Date;
@@ -174,7 +178,12 @@ export default class CalendarWeek extends Vue {
     this.resetDayStatusDataHandle(dayStatus);
   }
 
-  resetDayStatus(status: Array<Calender.DayStatus>): void {
+  /**
+   * 重置每天的日期状态
+   * @param {Array<Calender.DayStatus>} status 需要重置状态的日期数组
+   * @param {boolean} swiper 是否是swiper滑动触发，swiper滑动触发不需要重新计算slide的索引activeIndex 
+   */
+  resetDayStatus(status: Array<Calender.DayStatus>, swiper: boolean = false): void {
     //@ts-ignore
     let dayStatus: Array<Calender.DayStatus> = status;
     //重置每天状态
@@ -198,29 +207,27 @@ export default class CalendarWeek extends Vue {
       return;
     }
 
-    //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
-    //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
+    //获取重置的日期默认选中的那一天，重新更新currentDate
     let isDayExistSlide: boolean = false;
+    let currentDate: string = "";
     for (let item of dayStatus) {
       if (item.default) {
+        currentDate = item.currentDate;
         this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
         this.tempOption.currentDate = item.currentDate;
-        if (this.tempDayStatus[item.currentDate]) {
-          isDayExistSlide = true;
-          break;
-        }
+        break;
       }
     }
 
     //重置每天的状态
-    // for (let item1 of this.weekCalender.WeekDayList) {
-    //   for (let item2 of item1.dayList) {
-    //     if (!item2.dayDesc) continue;
-    //     item2.dayClass = "day";
-    //     item2.dayDesc = item2.oriDayDesc;
-    //     item2.enabled = this.reset ? false : true;
-    //   }
-    // }
+    for (let item1 of this.weekCalender.WeekDayList) {
+      for (let item2 of item1.dayList) {
+        if (!item2.dayDesc) continue;
+        item2.dayClass = "day";
+        item2.dayDesc = item2.oriDayDesc;
+        item2.enabled = false;
+      }
+    }
 
     for (let item of dayStatus) {
       for (let item1 of this.weekCalender.WeekDayList) {
@@ -252,28 +259,94 @@ export default class CalendarWeek extends Vue {
             } else {
               item2.dayClass = "day current";
             }
+            console.log(item2);
             this.chooseDayItemHandle(item2, null);
           }
         }
       }
     }
-    //假如reset的currentDate最后一天在已经生成的slide里面
-    //则不需要重新生成日历，将reset的currentDate存在的slide默认显示
-    if (isDayExistSlide) {
+    //假如是滑动日历的话，则不需要重新计算slide的索引activeIndex
+    //todo:计算slide的索引需要重新计算
+    if (currentDate && !swiper) {
       let index = 0;
-      for (let item in this.tempDayStatus) {
+      let breakCycleFlag: boolean = false;
+      for (let item of this.weekCalender.WeekDayList) {
         index++;
-        if (item == Utils.dateFormat("yyyy-MM-dd", this.calenderOption.currentDate)) {
-          break;
+        for (let item1 of item.dayList) {
+          if (item1.currentDate == currentDate) {
+            breakCycleFlag = true;
+            break;
+          }
         }
+        if (breakCycleFlag) break;
       }
-      let activeIndex = index / 7;
-      this.daySwiper.slideTo(activeIndex, 300);
+      console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + index);
+      if (this.daySwiper.activeIndex == 0) {
+        this.daySwiper.slideTo(index - 1, 300);
+        this.daySwiper.activeIndex = index - 1;
+        this.daySwiper.realIndex = index - 1;
+      } else {
+        if (index - 1 != this.daySwiper.activeIndex) {
+          if (index > this.daySwiper.activeIndex) {
+            this.daySwiper.slideTo(index - this.daySwiper.activeIndex, 300);
+          } else {
+            this.daySwiper.slideTo(index - 1, 300);
+          }
+        }
+
+        //this.daySwiper.activeIndex = index - this.daySwiper.activeIndex;
+        //this.daySwiper.realIndex = index - this.daySwiper.activeIndex;
+      }
+
+      this.slideToFlag = true;
+      // let key = Object.keys(this.tempDayStatus);
+      // key = key.sort(function (a, b) {
+      //   if (Utils.createCorrectDate(a) > Utils.createCorrectDate(b)) return 1;
+      //   return -1;
+      // });
+      // for (let i = 0; i < key.length; i++) {
+      //   index++;
+      //   if (key[i] == currentDate) {
+      //     // this.daySwiper.activeIndex = 0;
+      //     // this.daySwiper.realIndex = 0;
+      //     let activeIndex = Math.ceil(index / 7);
+      //     console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + activeIndex);
+      //     //if (activeIndex < 1) activeIndex = 0;
+      //     //else activeIndex = Math.floor(activeIndex);
+      //     console.log("change slide index ====== " + activeIndex);
+
+      //     if (this.daySwiper.activeIndex == 0) {
+      //       this.daySwiper.slideTo(activeIndex -1, 300);
+      //       this.daySwiper.activeIndex = activeIndex - 1;
+      //       this.daySwiper.realIndex = activeIndex -1;
+      //     } else {
+      //       this.daySwiper.slideTo(activeIndex -this.daySwiper.activeIndex, 300);
+      //       this.daySwiper.activeIndex = activeIndex - this.daySwiper.activeIndex;
+      //       this.daySwiper.realIndex = activeIndex -this.daySwiper.activeIndex;
+      //     }
+
+      //     // if (activeIndex <= this.daySwiper.activeIndex) {
+      //     //   this.daySwiper.slideTo(activeIndex -1, 300);
+      //     //   this.daySwiper.activeIndex = activeIndex - 1;
+      //     //   this.daySwiper.realIndex = activeIndex -1;
+      //     // } else {
+      //     //   this.daySwiper.slideTo(activeIndex, 300);
+      //     //   this.daySwiper.activeIndex = activeIndex;
+      //     //   this.daySwiper.realIndex = activeIndex;
+      //     // }
+      //     //this.daySwiper.slideTo(activeIndex, 300);
+      //     // this.daySwiper.activeIndex = activeIndex;
+      //     // this.daySwiper.realIndex = activeIndex;
+      //     this.slideToFlag = true;
+      //     break;
+      //   }
+      // }
     }
   }
 
   /**
-   * 重置每天日期状态
+   * 处理需要重置日期状态的数据，假如需要重置的日期不在已经生成的slide里面，重新
+   * 以默认选中的那一天为基准，重新生成日历
    * @param {Array<Calender.DayStatus>} dayStatus 要重置的状态
    * @return {void} 无返回值
    */
@@ -283,24 +356,22 @@ export default class CalendarWeek extends Vue {
 
     //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
     //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
-    let isDayExistSlide: boolean = false;
+    let currentDate: string = "";
     for (let item of dayStatus) {
       if (item.default) {
+        currentDate = item.currentDate;
         this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
         this.tempOption.currentDate = item.currentDate;
-        if (this.tempDayStatus[item.currentDate]) {
-          isDayExistSlide = true;
-          break;
-        }
+        break;
       }
     }
-    console.log("this is isDayExistSlide ======= " + isDayExistSlide);
     //要重置的日期最大的一天不在生成的slide块里面，则按照
     //当前的重置的currentDate为基准，重新生成日历的slide块
-    if (!isDayExistSlide) {
+    if (!this.tempDayStatus[currentDate]) {
       //重新生成日历
       this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
     }
+    //this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
     this.resetDayStatus(dayStatus);
   }
 
@@ -357,6 +428,7 @@ export default class CalendarWeek extends Vue {
         dayModel.oriDayDesc = dayModel.dayDesc;
         //若设置了reset重置每天状态，则禁止enabled，让调用者通过设置status状态来设定可点击的日期
         dayModel.enabled = this.reset ? false : true;
+        dayModel.oriEnabled = dayModel.enabled;
         if (today == dayModel.currentDate && today == defaultDay) {
           dayModel.dayDesc = "今";
           dayModel.oriDayDesc = dayModel.dayDesc;
@@ -466,21 +538,23 @@ export default class CalendarWeek extends Vue {
     let chooseDate: Date = null;
     let chooseDayItem: Calender.DayModel = null;
     let breakCycleFlag: boolean = false;
-    for (let item of _this.weekCalender.WeekDayList) {
-      for (let item1 of item.dayList) {
-        if (!item1.dayDesc) continue;
-        if (item1.dayClass.indexOf("current") > -1) {//取出选中的一天
-          chooseDate = Utils.createCorrectDate(item1.currentDate);
-          chooseDayItem = Object.assign({}, item1);
-          breakCycleFlag = true;
-          break;
+    if (!_this.reset) {
+      for (let item of _this.weekCalender.WeekDayList) {
+        for (let item1 of item.dayList) {
+          if (!item1.dayDesc) continue;
+          if (item1.dayClass.indexOf("current") > -1) {//取出选中的一天
+            chooseDate = Utils.createCorrectDate(item1.currentDate);
+            chooseDayItem = Object.assign({}, item1);
+            breakCycleFlag = true;
+            break;
+          }
+          // if (!_this.reset) {
+          //   item1.dayDesc = item1.oriDayDesc;
+          //   item1.dayClass = item1.oriDayClass;
+          // }
         }
-        // if (!_this.reset) {
-        //   item1.dayDesc = item1.oriDayDesc;
-        //   item1.dayClass = item1.oriDayClass;
-        // }
+        if (breakCycleFlag) break;
       }
-      if (breakCycleFlag) break;
     }
 
     /*******************提前渲染上一周的日历 begin*****************/
@@ -497,6 +571,11 @@ export default class CalendarWeek extends Vue {
         daySwiper.realIndex = daySwiper.realIndex + 1;
         _this.daySwiperIndex += 1;
       }
+    }
+    if (Utils.createCorrectDate(currentMonthDateStr) >= beginDate) {
+      _this.dateDescription = currentMonthDateStr;
+    } else {
+      _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", beginDate);
     }
     _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
     /*******************提前渲染上一周的日历 end*****************/
@@ -532,23 +611,26 @@ export default class CalendarWeek extends Vue {
         includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
       }
 
-
       //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
       for (let item of _this.dayStatus) {
         if (includes.hasOwnProperty(item.currentDate)) {
           item.default = true;
-          chooseDayItem.currentDate = item.currentDate;
-          chooseDayItem.dayClass = item.dayClass + " current";
-          chooseDayItem.enabled = item.enabled;
-          chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-          chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-          _this.chooseDayItemHandle(chooseDayItem, null);
+          // chooseDayItem = new Calender.DayModel();
+          // chooseDayItem.currentDate = item.currentDate;
+          // chooseDayItem.dayClass = item.dayClass + " current";
+          // chooseDayItem.enabled = item.enabled;
+          // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          //_this.chooseDayItemHandle(chooseDayItem, null);
           break;
         } else {
-          item.default = false;
+          if (!_this.slideToFlag) {
+            _this.slideToFlag = false;
+            item.default = false;
+          }
         }
       }
-      //_this.resetDayStatus(_this.dayStatus);
+      _this.resetDayStatus(_this.dayStatus, true);
       //_this.chooseDayItemHandle(chooseDayItem, null);
 
       // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
@@ -570,21 +652,23 @@ export default class CalendarWeek extends Vue {
     let chooseDate: Date = null;
     let chooseDayItem: Calender.DayModel = null;
     let breakCycleFlag: boolean = false;
-    for (let item of _this.weekCalender.WeekDayList) {
-      for (let item1 of item.dayList) {
-        if (!item1.dayDesc) continue;
-        if (item1.dayClass.indexOf("current") > -1) {//取出选中的一天
-          chooseDate = Utils.createCorrectDate(item1.currentDate);
-          chooseDayItem = Object.assign({}, item1);
-          breakCycleFlag = true;
-          break;
+    if (!_this.reset) {
+      for (let item of _this.weekCalender.WeekDayList) {
+        for (let item1 of item.dayList) {
+          if (!item1.dayDesc) continue;
+          if (item1.dayClass.indexOf("current") > -1) {//取出选中的一天
+            chooseDate = Utils.createCorrectDate(item1.currentDate);
+            chooseDayItem = Object.assign({}, item1);
+            breakCycleFlag = true;
+            break;
+          }
+          // if (!_this.reset) {
+          //   item1.dayDesc = item1.oriDayDesc;
+          //   item1.dayClass = item1.oriDayClass;
+          // }
         }
-        // if (!_this.reset) {
-        //   item1.dayDesc = item1.oriDayDesc;
-        //   item1.dayClass = item1.oriDayClass;
-        // }
+        if (breakCycleFlag) break;
       }
-      if (breakCycleFlag) break;
     }
 
     /*******************提前渲染下一周的日历 begin*****************/
@@ -598,7 +682,11 @@ export default class CalendarWeek extends Vue {
         _this.daySwiperIncludes.push(dateStr);
       }
     }
-
+    if (Utils.createCorrectDate(currentMonthDateStr) <= endDate) {
+      _this.dateDescription = currentMonthDateStr;
+    } else {
+      _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", endDate);
+    }
     _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
     /*******************提前渲染下一周的日历 end*****************/
 
@@ -639,18 +727,22 @@ export default class CalendarWeek extends Vue {
       for (let item of _this.dayStatus) {
         if (includes.hasOwnProperty(item.currentDate)) {
           item.default = true;
-          chooseDayItem.currentDate = item.currentDate;
-          chooseDayItem.dayClass = item.dayClass + " current";
-          chooseDayItem.enabled = item.enabled;
-          chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-          chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-          _this.chooseDayItemHandle(chooseDayItem, null);
+          // chooseDayItem = new Calender.DayModel();
+          // chooseDayItem.currentDate = item.currentDate;
+          // chooseDayItem.dayClass = item.dayClass + " current";
+          // chooseDayItem.enabled = item.enabled;
+          // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+          //_this.chooseDayItemHandle(chooseDayItem, null);
           break;
         } else {
-          item.default = false;
+          if (!_this.slideToFlag) {
+            _this.slideToFlag = false;
+            item.default = false;
+          }
         }
       }
-      //_this.resetDayStatus(_this.dayStatus);
+      _this.resetDayStatus(_this.dayStatus, true);
       // _this.chooseDayItemHandle(chooseDayItem, null);
 
       // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {

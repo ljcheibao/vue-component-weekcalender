@@ -12,8 +12,8 @@ new Vue({
     return {
       options: {
         showHeader: true,
-        beginDate: "2018-08-01",
-        endDate: "2018-08-16",
+        beginDate: "2018-07-01",
+        endDate: "2018-09-16",
         currentDate: "2018-08-04"
       },
       reset: true,

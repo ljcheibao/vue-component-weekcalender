@@ -687,6 +687,7 @@ var CalendarWeek = /** @class */ (function (_super) {
     __extends(CalendarWeek, _super);
     function CalendarWeek() {
         var _this_1 = _super !== null && _super.apply(this, arguments) || this;
+        _this_1.slideToFlag = false;
         //日期描述
         _this_1.dateDescription = "";
         /**
@@ -805,7 +806,13 @@ var CalendarWeek = /** @class */ (function (_super) {
         this.dayStatus = dayStatus;
         this.resetDayStatusDataHandle(dayStatus);
     };
-    CalendarWeek.prototype.resetDayStatus = function (status) {
+    /**
+     * 重置每天的日期状态
+     * @param {Array<Calender.DayStatus>} status 需要重置状态的日期数组
+     * @param {boolean} swiper 是否是swiper滑动触发，swiper滑动触发不需要重新计算slide的索引activeIndex
+     */
+    CalendarWeek.prototype.resetDayStatus = function (status, swiper) {
+        if (swiper === void 0) { swiper = false; }
         //@ts-ignore
         var dayStatus = status;
         //重置每天状态
@@ -831,35 +838,36 @@ var CalendarWeek = /** @class */ (function (_super) {
             }
             return;
         }
-        //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
-        //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
+        //获取重置的日期默认选中的那一天，重新更新currentDate
         var isDayExistSlide = false;
+        var currentDate = "";
         for (var _d = 0, dayStatus_1 = dayStatus; _d < dayStatus_1.length; _d++) {
             var item = dayStatus_1[_d];
             if (item.default) {
+                currentDate = item.currentDate;
                 this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
                 this.tempOption.currentDate = item.currentDate;
-                if (this.tempDayStatus[item.currentDate]) {
-                    isDayExistSlide = true;
-                    break;
-                }
+                break;
             }
         }
         //重置每天的状态
-        // for (let item1 of this.weekCalender.WeekDayList) {
-        //   for (let item2 of item1.dayList) {
-        //     if (!item2.dayDesc) continue;
-        //     item2.dayClass = "day";
-        //     item2.dayDesc = item2.oriDayDesc;
-        //     item2.enabled = this.reset ? false : true;
-        //   }
-        // }
-        for (var _e = 0, dayStatus_2 = dayStatus; _e < dayStatus_2.length; _e++) {
-            var item = dayStatus_2[_e];
-            for (var _f = 0, _g = this.weekCalender.WeekDayList; _f < _g.length; _f++) {
-                var item1 = _g[_f];
-                for (var _h = 0, _j = item1.dayList; _h < _j.length; _h++) {
-                    var item2 = _j[_h];
+        for (var _e = 0, _f = this.weekCalender.WeekDayList; _e < _f.length; _e++) {
+            var item1 = _f[_e];
+            for (var _g = 0, _h = item1.dayList; _g < _h.length; _g++) {
+                var item2 = _h[_g];
+                if (!item2.dayDesc)
+                    continue;
+                item2.dayClass = "day";
+                item2.dayDesc = item2.oriDayDesc;
+                item2.enabled = false;
+            }
+        }
+        for (var _j = 0, dayStatus_2 = dayStatus; _j < dayStatus_2.length; _j++) {
+            var item = dayStatus_2[_j];
+            for (var _k = 0, _l = this.weekCalender.WeekDayList; _k < _l.length; _k++) {
+                var item1 = _l[_k];
+                for (var _m = 0, _o = item1.dayList; _m < _o.length; _m++) {
+                    var item2 = _o[_m];
                     if (!item2.dayDesc)
                         continue;
                     if (item.default) { //存在默认的天数，则reset每天的状态
@@ -887,27 +895,94 @@ var CalendarWeek = /** @class */ (function (_super) {
                         else {
                             item2.dayClass = "day current";
                         }
+                        console.log(item2);
                         this.chooseDayItemHandle(item2, null);
                     }
                 }
             }
         }
-        //假如reset的currentDate最后一天在已经生成的slide里面
-        //则不需要重新生成日历，将reset的currentDate存在的slide默认显示
-        if (isDayExistSlide) {
+        //假如是滑动日历的话，则不需要重新计算slide的索引activeIndex
+        //todo:计算slide的索引需要重新计算
+        if (currentDate && !swiper) {
             var index = 0;
-            for (var item in this.tempDayStatus) {
+            var breakCycleFlag_1 = false;
+            for (var _p = 0, _q = this.weekCalender.WeekDayList; _p < _q.length; _p++) {
+                var item = _q[_p];
                 index++;
-                if (item == Utils.dateFormat("yyyy-MM-dd", this.calenderOption.currentDate)) {
-                    break;
+                for (var _r = 0, _s = item.dayList; _r < _s.length; _r++) {
+                    var item1 = _s[_r];
+                    if (item1.currentDate == currentDate) {
+                        breakCycleFlag_1 = true;
+                        break;
+                    }
                 }
+                if (breakCycleFlag_1)
+                    break;
             }
-            var activeIndex = index / 7;
-            this.daySwiper.slideTo(activeIndex, 300);
+            console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + index);
+            if (this.daySwiper.activeIndex == 0) {
+                this.daySwiper.slideTo(index - 1, 300);
+                this.daySwiper.activeIndex = index - 1;
+                this.daySwiper.realIndex = index - 1;
+            }
+            else {
+                if (index - 1 != this.daySwiper.activeIndex) {
+                    if (index > this.daySwiper.activeIndex) {
+                        this.daySwiper.slideTo(index - this.daySwiper.activeIndex, 300);
+                    }
+                    else {
+                        this.daySwiper.slideTo(index - 1, 300);
+                    }
+                }
+                //this.daySwiper.activeIndex = index - this.daySwiper.activeIndex;
+                //this.daySwiper.realIndex = index - this.daySwiper.activeIndex;
+            }
+            this.slideToFlag = true;
+            // let key = Object.keys(this.tempDayStatus);
+            // key = key.sort(function (a, b) {
+            //   if (Utils.createCorrectDate(a) > Utils.createCorrectDate(b)) return 1;
+            //   return -1;
+            // });
+            // for (let i = 0; i < key.length; i++) {
+            //   index++;
+            //   if (key[i] == currentDate) {
+            //     // this.daySwiper.activeIndex = 0;
+            //     // this.daySwiper.realIndex = 0;
+            //     let activeIndex = Math.ceil(index / 7);
+            //     console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + activeIndex);
+            //     //if (activeIndex < 1) activeIndex = 0;
+            //     //else activeIndex = Math.floor(activeIndex);
+            //     console.log("change slide index ====== " + activeIndex);
+            //     if (this.daySwiper.activeIndex == 0) {
+            //       this.daySwiper.slideTo(activeIndex -1, 300);
+            //       this.daySwiper.activeIndex = activeIndex - 1;
+            //       this.daySwiper.realIndex = activeIndex -1;
+            //     } else {
+            //       this.daySwiper.slideTo(activeIndex -this.daySwiper.activeIndex, 300);
+            //       this.daySwiper.activeIndex = activeIndex - this.daySwiper.activeIndex;
+            //       this.daySwiper.realIndex = activeIndex -this.daySwiper.activeIndex;
+            //     }
+            //     // if (activeIndex <= this.daySwiper.activeIndex) {
+            //     //   this.daySwiper.slideTo(activeIndex -1, 300);
+            //     //   this.daySwiper.activeIndex = activeIndex - 1;
+            //     //   this.daySwiper.realIndex = activeIndex -1;
+            //     // } else {
+            //     //   this.daySwiper.slideTo(activeIndex, 300);
+            //     //   this.daySwiper.activeIndex = activeIndex;
+            //     //   this.daySwiper.realIndex = activeIndex;
+            //     // }
+            //     //this.daySwiper.slideTo(activeIndex, 300);
+            //     // this.daySwiper.activeIndex = activeIndex;
+            //     // this.daySwiper.realIndex = activeIndex;
+            //     this.slideToFlag = true;
+            //     break;
+            //   }
+            // }
         }
     };
     /**
-     * 重置每天日期状态
+     * 处理需要重置日期状态的数据，假如需要重置的日期不在已经生成的slide里面，重新
+     * 以默认选中的那一天为基准，重新生成日历
      * @param {Array<Calender.DayStatus>} dayStatus 要重置的状态
      * @return {void} 无返回值
      */
@@ -916,24 +991,23 @@ var CalendarWeek = /** @class */ (function (_super) {
         var dayStatus = status;
         //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
         //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
-        var isDayExistSlide = false;
+        var currentDate = "";
         for (var _i = 0, dayStatus_3 = dayStatus; _i < dayStatus_3.length; _i++) {
             var item = dayStatus_3[_i];
             if (item.default) {
+                currentDate = item.currentDate;
                 this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
                 this.tempOption.currentDate = item.currentDate;
-                if (this.tempDayStatus[item.currentDate]) {
-                    isDayExistSlide = true;
-                    break;
-                }
+                break;
             }
         }
         //要重置的日期最大的一天不在生成的slide块里面，则按照
         //当前的重置的currentDate为基准，重新生成日历的slide块
-        if (!isDayExistSlide) {
+        if (!this.tempDayStatus[currentDate]) {
             //重新生成日历
             this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
         }
+        //this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
         this.resetDayStatus(dayStatus);
     };
     /**
@@ -989,6 +1063,7 @@ var CalendarWeek = /** @class */ (function (_super) {
                 dayModel.oriDayDesc = dayModel.dayDesc;
                 //若设置了reset重置每天状态，则禁止enabled，让调用者通过设置status状态来设定可点击的日期
                 dayModel.enabled = this.reset ? false : true;
+                dayModel.oriEnabled = dayModel.enabled;
                 if (today == dayModel.currentDate && today == defaultDay) {
                     dayModel.dayDesc = "今";
                     dayModel.oriDayDesc = dayModel.dayDesc;
@@ -1096,25 +1171,27 @@ var CalendarWeek = /** @class */ (function (_super) {
         var chooseDate = null;
         var chooseDayItem = null;
         var breakCycleFlag = false;
-        for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
-            var item = _a[_i];
-            for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
-                var item1 = _c[_b];
-                if (!item1.dayDesc)
-                    continue;
-                if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
-                    chooseDate = Utils.createCorrectDate(item1.currentDate);
-                    chooseDayItem = Object.assign({}, item1);
-                    breakCycleFlag = true;
-                    break;
+        if (!_this.reset) {
+            for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
+                var item = _a[_i];
+                for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
+                    var item1 = _c[_b];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
+                        chooseDate = Utils.createCorrectDate(item1.currentDate);
+                        chooseDayItem = Object.assign({}, item1);
+                        breakCycleFlag = true;
+                        break;
+                    }
+                    // if (!_this.reset) {
+                    //   item1.dayDesc = item1.oriDayDesc;
+                    //   item1.dayClass = item1.oriDayClass;
+                    // }
                 }
-                // if (!_this.reset) {
-                //   item1.dayDesc = item1.oriDayDesc;
-                //   item1.dayClass = item1.oriDayClass;
-                // }
+                if (breakCycleFlag)
+                    break;
             }
-            if (breakCycleFlag)
-                break;
         }
         /*******************提前渲染上一周的日历 begin*****************/
         var currentDate = Utils.createCorrectDate(currentMonthDateStr);
@@ -1130,6 +1207,12 @@ var CalendarWeek = /** @class */ (function (_super) {
                 _this.daySwiperIndex += 1;
             }
         }
+        if (Utils.createCorrectDate(currentMonthDateStr) >= beginDate) {
+            _this.dateDescription = currentMonthDateStr;
+        }
+        else {
+            _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", beginDate);
+        }
         _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
         /*******************提前渲染上一周的日历 end*****************/
         if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
@@ -1137,7 +1220,7 @@ var CalendarWeek = /** @class */ (function (_super) {
             //否则，原来选的是周几，则显示周几
             chooseDate.setDate(chooseDate.getDate() - 7);
             var chooseDay = null;
-            var breakCycleFlag_1 = false;
+            var breakCycleFlag_2 = false;
             for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
                 var item = _e[_d];
                 for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
@@ -1149,113 +1232,6 @@ var CalendarWeek = /** @class */ (function (_super) {
                     }
                     else {
                         chooseDay = Utils.dateFormat("yyyy-MM-dd", beginDate);
-                    }
-                    if (item1.currentDate != chooseDay)
-                        continue;
-                    breakCycleFlag_1 = true;
-                    item1.dayClass = "day current";
-                    _this.chooseDayItemHandle(item1, null);
-                    break;
-                }
-                if (breakCycleFlag_1)
-                    break;
-            }
-        }
-        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
-            var includes = {};
-            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
-            includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
-            for (var i = 1; i <= 6; i++) {
-                tempBegin.setDate(tempBegin.getDate() + 1);
-                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
-            }
-            //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
-            for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
-                var item = _j[_h];
-                if (includes.hasOwnProperty(item.currentDate)) {
-                    item.default = true;
-                    chooseDayItem.currentDate = item.currentDate;
-                    chooseDayItem.dayClass = item.dayClass + " current";
-                    chooseDayItem.enabled = item.enabled;
-                    chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    _this.chooseDayItemHandle(chooseDayItem, null);
-                    break;
-                }
-                else {
-                    item.default = false;
-                }
-            }
-            //_this.resetDayStatus(_this.dayStatus);
-            //_this.chooseDayItemHandle(chooseDayItem, null);
-            // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
-            //   _this.chooseDayItemHandle(chooseDayItem, null);
-            // } else {//选中第一天
-            //   this.dateDescription = currentMonthDateStr;
-            // }
-        }
-    };
-    /**
-     * 向右边滑动
-     * @param {swiper} daySwiper
-     * @return {void} 无返回值
-     */
-    CalendarWeek.prototype.slideNextTransitionEnd = function (daySwiper) {
-        var _this = this;
-        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
-        var chooseDate = null;
-        var chooseDayItem = null;
-        var breakCycleFlag = false;
-        for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
-            var item = _a[_i];
-            for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
-                var item1 = _c[_b];
-                if (!item1.dayDesc)
-                    continue;
-                if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
-                    chooseDate = Utils.createCorrectDate(item1.currentDate);
-                    chooseDayItem = Object.assign({}, item1);
-                    breakCycleFlag = true;
-                    break;
-                }
-                // if (!_this.reset) {
-                //   item1.dayDesc = item1.oriDayDesc;
-                //   item1.dayClass = item1.oriDayClass;
-                // }
-            }
-            if (breakCycleFlag)
-                break;
-        }
-        /*******************提前渲染下一周的日历 begin*****************/
-        var currentDate = Utils.createCorrectDate(currentMonthDateStr);
-        var endDate = _this.calenderOption.endDate;
-        currentDate.setDate(currentDate.getDate() + 7);
-        if (currentDate < endDate) {
-            var dateStr = Utils.dateFormat("yyyy-MM-dd", currentDate);
-            if (!_this.daySwiperIncludes.includes(dateStr)) {
-                _this.renderCalenderView(currentDate);
-                _this.daySwiperIncludes.push(dateStr);
-            }
-        }
-        _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
-        /*******************提前渲染下一周的日历 end*****************/
-        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
-            //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
-            //否则，原来选的是周几，则显示周几
-            chooseDate.setDate(chooseDate.getDate() + 7);
-            var chooseDay = null;
-            var breakCycleFlag_2 = false;
-            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
-                var item = _e[_d];
-                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
-                    var item1 = _g[_f];
-                    if (!item1.dayDesc)
-                        continue;
-                    if (chooseDate <= endDate) {
-                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
-                    }
-                    else {
-                        chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
                     }
                     if (item1.currentDate != chooseDay)
                         continue;
@@ -1281,19 +1257,142 @@ var CalendarWeek = /** @class */ (function (_super) {
                 var item = _j[_h];
                 if (includes.hasOwnProperty(item.currentDate)) {
                     item.default = true;
-                    chooseDayItem.currentDate = item.currentDate;
-                    chooseDayItem.dayClass = item.dayClass + " current";
-                    chooseDayItem.enabled = item.enabled;
-                    chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    _this.chooseDayItemHandle(chooseDayItem, null);
+                    // chooseDayItem = new Calender.DayModel();
+                    // chooseDayItem.currentDate = item.currentDate;
+                    // chooseDayItem.dayClass = item.dayClass + " current";
+                    // chooseDayItem.enabled = item.enabled;
+                    // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    //_this.chooseDayItemHandle(chooseDayItem, null);
                     break;
                 }
                 else {
-                    item.default = false;
+                    if (!_this.slideToFlag) {
+                        _this.slideToFlag = false;
+                        item.default = false;
+                    }
                 }
             }
-            //_this.resetDayStatus(_this.dayStatus);
+            _this.resetDayStatus(_this.dayStatus, true);
+            //_this.chooseDayItemHandle(chooseDayItem, null);
+            // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
+            //   _this.chooseDayItemHandle(chooseDayItem, null);
+            // } else {//选中第一天
+            //   this.dateDescription = currentMonthDateStr;
+            // }
+        }
+    };
+    /**
+     * 向右边滑动
+     * @param {swiper} daySwiper
+     * @return {void} 无返回值
+     */
+    CalendarWeek.prototype.slideNextTransitionEnd = function (daySwiper) {
+        var _this = this;
+        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
+        var chooseDate = null;
+        var chooseDayItem = null;
+        var breakCycleFlag = false;
+        if (!_this.reset) {
+            for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
+                var item = _a[_i];
+                for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
+                    var item1 = _c[_b];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
+                        chooseDate = Utils.createCorrectDate(item1.currentDate);
+                        chooseDayItem = Object.assign({}, item1);
+                        breakCycleFlag = true;
+                        break;
+                    }
+                    // if (!_this.reset) {
+                    //   item1.dayDesc = item1.oriDayDesc;
+                    //   item1.dayClass = item1.oriDayClass;
+                    // }
+                }
+                if (breakCycleFlag)
+                    break;
+            }
+        }
+        /*******************提前渲染下一周的日历 begin*****************/
+        var currentDate = Utils.createCorrectDate(currentMonthDateStr);
+        var endDate = _this.calenderOption.endDate;
+        currentDate.setDate(currentDate.getDate() + 7);
+        if (currentDate < endDate) {
+            var dateStr = Utils.dateFormat("yyyy-MM-dd", currentDate);
+            if (!_this.daySwiperIncludes.includes(dateStr)) {
+                _this.renderCalenderView(currentDate);
+                _this.daySwiperIncludes.push(dateStr);
+            }
+        }
+        if (Utils.createCorrectDate(currentMonthDateStr) <= endDate) {
+            _this.dateDescription = currentMonthDateStr;
+        }
+        else {
+            _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", endDate);
+        }
+        _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
+        /*******************提前渲染下一周的日历 end*****************/
+        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
+            //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
+            //否则，原来选的是周几，则显示周几
+            chooseDate.setDate(chooseDate.getDate() + 7);
+            var chooseDay = null;
+            var breakCycleFlag_3 = false;
+            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
+                var item = _e[_d];
+                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
+                    var item1 = _g[_f];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (chooseDate <= endDate) {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+                    }
+                    else {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
+                    }
+                    if (item1.currentDate != chooseDay)
+                        continue;
+                    breakCycleFlag_3 = true;
+                    item1.dayClass = "day current";
+                    _this.chooseDayItemHandle(item1, null);
+                    break;
+                }
+                if (breakCycleFlag_3)
+                    break;
+            }
+        }
+        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
+            var includes = {};
+            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
+            includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            for (var i = 1; i <= 6; i++) {
+                tempBegin.setDate(tempBegin.getDate() + 1);
+                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            }
+            //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
+            for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
+                var item = _j[_h];
+                if (includes.hasOwnProperty(item.currentDate)) {
+                    item.default = true;
+                    // chooseDayItem = new Calender.DayModel();
+                    // chooseDayItem.currentDate = item.currentDate;
+                    // chooseDayItem.dayClass = item.dayClass + " current";
+                    // chooseDayItem.enabled = item.enabled;
+                    // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
+                    //_this.chooseDayItemHandle(chooseDayItem, null);
+                    break;
+                }
+                else {
+                    if (!_this.slideToFlag) {
+                        _this.slideToFlag = false;
+                        item.default = false;
+                    }
+                }
+            }
+            _this.resetDayStatus(_this.dayStatus, true);
             // _this.chooseDayItemHandle(chooseDayItem, null);
             // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
             //   _this.chooseDayItemHandle(chooseDayItem, null);
@@ -1377,6 +1476,8 @@ var CalendarWeek = /** @class */ (function (_super) {
         })
         /**
          * 周日历组件
+         * 日历的生成标准是以默认选中的currentDate为基准
+         * 生成当前currentDate所在的一周数据、上一周数组、下一周数据
          * @class
          * @extends {Vue}
          */
@@ -1413,8 +1514,8 @@ new _vue2.default({
     return {
       options: {
         showHeader: true,
-        beginDate: "2018-08-01",
-        endDate: "2018-08-16",
+        beginDate: "2018-07-01",
+        endDate: "2018-09-16",
         currentDate: "2018-08-04"
       },
       reset: true,
@@ -9959,6 +10060,10 @@ var Calender;
              * 每天日历是否可用(点击)
              */
             this.enabled = true;
+            /**
+             * 每天日历是否可用(点击)
+             */
+            this.oriEnabled = true;
         }
         return DayModel;
     }());
