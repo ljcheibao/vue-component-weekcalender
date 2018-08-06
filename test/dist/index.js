@@ -895,7 +895,6 @@ var CalendarWeek = /** @class */ (function (_super) {
                         else {
                             item2.dayClass = "day current";
                         }
-                        console.log(item2);
                         this.chooseDayItemHandle(item2, null);
                     }
                 }
@@ -926,58 +925,9 @@ var CalendarWeek = /** @class */ (function (_super) {
                 this.daySwiper.realIndex = index - 1;
             }
             else {
-                /* if (index - 1 != this.daySwiper.activeIndex) {
-                  if (index > this.daySwiper.activeIndex) {
-                    this.daySwiper.slideTo(index - this.daySwiper.activeIndex, 300);
-                  } else {
-                    this.daySwiper.slideTo(index - 1, 300);
-                  }
-                } */
                 this.daySwiper.slideTo(index - 1, 300);
-                //this.daySwiper.activeIndex = index - this.daySwiper.activeIndex;
-                //this.daySwiper.realIndex = index - this.daySwiper.activeIndex;
             }
             this.slideToFlag = true;
-            // let key = Object.keys(this.tempDayStatus);
-            // key = key.sort(function (a, b) {
-            //   if (Utils.createCorrectDate(a) > Utils.createCorrectDate(b)) return 1;
-            //   return -1;
-            // });
-            // for (let i = 0; i < key.length; i++) {
-            //   index++;
-            //   if (key[i] == currentDate) {
-            //     // this.daySwiper.activeIndex = 0;
-            //     // this.daySwiper.realIndex = 0;
-            //     let activeIndex = Math.ceil(index / 7);
-            //     console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + activeIndex);
-            //     //if (activeIndex < 1) activeIndex = 0;
-            //     //else activeIndex = Math.floor(activeIndex);
-            //     console.log("change slide index ====== " + activeIndex);
-            //     if (this.daySwiper.activeIndex == 0) {
-            //       this.daySwiper.slideTo(activeIndex -1, 300);
-            //       this.daySwiper.activeIndex = activeIndex - 1;
-            //       this.daySwiper.realIndex = activeIndex -1;
-            //     } else {
-            //       this.daySwiper.slideTo(activeIndex -this.daySwiper.activeIndex, 300);
-            //       this.daySwiper.activeIndex = activeIndex - this.daySwiper.activeIndex;
-            //       this.daySwiper.realIndex = activeIndex -this.daySwiper.activeIndex;
-            //     }
-            //     // if (activeIndex <= this.daySwiper.activeIndex) {
-            //     //   this.daySwiper.slideTo(activeIndex -1, 300);
-            //     //   this.daySwiper.activeIndex = activeIndex - 1;
-            //     //   this.daySwiper.realIndex = activeIndex -1;
-            //     // } else {
-            //     //   this.daySwiper.slideTo(activeIndex, 300);
-            //     //   this.daySwiper.activeIndex = activeIndex;
-            //     //   this.daySwiper.realIndex = activeIndex;
-            //     // }
-            //     //this.daySwiper.slideTo(activeIndex, 300);
-            //     // this.daySwiper.activeIndex = activeIndex;
-            //     // this.daySwiper.realIndex = activeIndex;
-            //     this.slideToFlag = true;
-            //     break;
-            //   }
-            // }
         }
     };
     /**
@@ -1252,18 +1202,13 @@ var CalendarWeek = /** @class */ (function (_super) {
                 tempBegin.setDate(tempBegin.getDate() + 1);
                 includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
             }
+            var isExistDay = false;
             //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
             for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
                 var item = _j[_h];
                 if (includes.hasOwnProperty(item.currentDate)) {
                     item.default = true;
-                    // chooseDayItem = new Calender.DayModel();
-                    // chooseDayItem.currentDate = item.currentDate;
-                    // chooseDayItem.dayClass = item.dayClass + " current";
-                    // chooseDayItem.enabled = item.enabled;
-                    // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    //_this.chooseDayItemHandle(chooseDayItem, null);
+                    isExistDay = true;
                     break;
                 }
                 else {
@@ -1273,13 +1218,8 @@ var CalendarWeek = /** @class */ (function (_super) {
                     }
                 }
             }
-            _this.resetDayStatus(_this.dayStatus, true);
-            //_this.chooseDayItemHandle(chooseDayItem, null);
-            // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
-            //   _this.chooseDayItemHandle(chooseDayItem, null);
-            // } else {//选中第一天
-            //   this.dateDescription = currentMonthDateStr;
-            // }
+            if (isExistDay)
+                _this.resetDayStatus(_this.dayStatus, true);
         }
     };
     /**
@@ -1371,18 +1311,13 @@ var CalendarWeek = /** @class */ (function (_super) {
                 tempBegin.setDate(tempBegin.getDate() + 1);
                 includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
             }
+            var isExistDay = false;
             //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
             for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
                 var item = _j[_h];
                 if (includes.hasOwnProperty(item.currentDate)) {
                     item.default = true;
-                    // chooseDayItem = new Calender.DayModel();
-                    // chooseDayItem.currentDate = item.currentDate;
-                    // chooseDayItem.dayClass = item.dayClass + " current";
-                    // chooseDayItem.enabled = item.enabled;
-                    // chooseDayItem.day = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    // chooseDayItem.dayDesc = Utils.dateFormat('d', Utils.createCorrectDate(item.currentDate));
-                    //_this.chooseDayItemHandle(chooseDayItem, null);
+                    isExistDay = true;
                     break;
                 }
                 else {
@@ -1392,13 +1327,8 @@ var CalendarWeek = /** @class */ (function (_super) {
                     }
                 }
             }
-            _this.resetDayStatus(_this.dayStatus, true);
-            // _this.chooseDayItemHandle(chooseDayItem, null);
-            // if (includes.hasOwnProperty(Utils.dateFormat("yyyy-MM-dd", chooseDate))) {
-            //   _this.chooseDayItemHandle(chooseDayItem, null);
-            // } else {//选中第一天
-            //   this.dateDescription = currentMonthDateStr;
-            // }
+            if (isExistDay)
+                _this.resetDayStatus(_this.dayStatus, true);
         }
     };
     /**
