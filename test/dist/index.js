@@ -926,14 +926,14 @@ var CalendarWeek = /** @class */ (function (_super) {
                 this.daySwiper.realIndex = index - 1;
             }
             else {
-                if (index - 1 != this.daySwiper.activeIndex) {
-                    if (index > this.daySwiper.activeIndex) {
-                        this.daySwiper.slideTo(index - this.daySwiper.activeIndex, 300);
-                    }
-                    else {
-                        this.daySwiper.slideTo(index - 1, 300);
-                    }
-                }
+                /* if (index - 1 != this.daySwiper.activeIndex) {
+                  if (index > this.daySwiper.activeIndex) {
+                    this.daySwiper.slideTo(index - this.daySwiper.activeIndex, 300);
+                  } else {
+                    this.daySwiper.slideTo(index - 1, 300);
+                  }
+                } */
+                this.daySwiper.slideTo(index - 1, 300);
                 //this.daySwiper.activeIndex = index - this.daySwiper.activeIndex;
                 //this.daySwiper.realIndex = index - this.daySwiper.activeIndex;
             }
