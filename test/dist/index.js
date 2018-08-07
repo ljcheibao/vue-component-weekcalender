@@ -919,6 +919,10 @@ var CalendarWeek = /** @class */ (function (_super) {
                     break;
             }
             console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + index);
+            if (this.daySwiper.activeIndex == index - 1) {
+                console.log(" this is no auto swiper =============");
+                return;
+            }
             if (this.daySwiper.activeIndex == 0) {
                 this.daySwiper.slideTo(index - 1, 300);
                 this.daySwiper.activeIndex = index - 1;
@@ -1206,20 +1210,26 @@ var CalendarWeek = /** @class */ (function (_super) {
             //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
             for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
                 var item = _j[_h];
-                if (includes.hasOwnProperty(item.currentDate)) {
+                if (includes.hasOwnProperty(item.currentDate) && !isExistDay) {
                     item.default = true;
                     isExistDay = true;
-                    break;
+                    //break;
                 }
                 else {
-                    if (!_this.slideToFlag) {
-                        _this.slideToFlag = false;
-                        item.default = false;
-                    }
+                    //if (!_this.slideToFlag) {
+                    //_this.slideToFlag = false;
+                    item.default = false;
+                    //}
                 }
             }
-            if (isExistDay)
-                _this.resetDayStatus(_this.dayStatus, true);
+            if (isExistDay) {
+                if (!_this.slideToFlag) { //没有自动滑动
+                    _this.resetDayStatus(_this.dayStatus, true);
+                }
+                else { //自动滑动
+                    _this.slideToFlag = false;
+                }
+            }
         }
     };
     /**
@@ -1315,20 +1325,26 @@ var CalendarWeek = /** @class */ (function (_super) {
             //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
             for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
                 var item = _j[_h];
-                if (includes.hasOwnProperty(item.currentDate)) {
+                if (includes.hasOwnProperty(item.currentDate) && !isExistDay) {
                     item.default = true;
                     isExistDay = true;
-                    break;
+                    //break;
                 }
                 else {
-                    if (!_this.slideToFlag) {
-                        _this.slideToFlag = false;
-                        item.default = false;
-                    }
+                    //if (!_this.slideToFlag) {
+                    //_this.slideToFlag = false;
+                    item.default = false;
+                    //}
                 }
             }
-            if (isExistDay)
-                _this.resetDayStatus(_this.dayStatus, true);
+            if (isExistDay) {
+                if (!_this.slideToFlag) { //没有自动滑动
+                    _this.resetDayStatus(_this.dayStatus, true);
+                }
+                else { //自动滑动
+                    _this.slideToFlag = false;
+                }
+            }
         }
     };
     /**
