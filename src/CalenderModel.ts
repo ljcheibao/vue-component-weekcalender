@@ -14,6 +14,11 @@ export namespace Calender {
      * 总共有多少周的日期集合
      */
     WeekDayList: Array<{
+      
+      /**
+       * 当前日期，格式为：yyyy-MM-dd，主要记录每一个slide块的第一个日期
+       */
+      currentMonthDate: string;
 
       /**
        * 每一天的日历数据列表
@@ -30,17 +35,30 @@ export namespace Calender {
   export class DayStatus {
 
     /**
-     * 每天状态列表
+     * 当前日期,格式yyyy-MM-dd
      */
-    dayStatusList: Array<{
-      currentDate: string,
-      dayDesc: string,
-      dayClass: string,
-      enabled: boolean,
-      default: boolean
-    }> = [];
-  }
+    currentDate: string;
 
+    /**
+     * 每天日期的描述
+     */
+    dayDesc: string;
+
+    /**
+     * 类名称
+     */
+    dayClass: string;
+
+    /**
+     * 是否可以点击，true表示可以点击
+     */
+    enabled: boolean;
+
+    /**
+     * 是否日历上默认显示，true表示默认显示
+     */
+    default: boolean;
+  }
 
 
   /**
@@ -112,5 +130,10 @@ export namespace Calender {
      * 每天日历是否可用(点击)
      */
     enabled: boolean = true;
+
+    /**
+     * 每天日历是否可用(点击)
+     */
+    oriEnabled: boolean = true;
   }
 }

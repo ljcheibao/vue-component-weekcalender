@@ -10,10 +10,13 @@
 
 <body style="margin:0;">
   <div id="app">
+    <button @click="changeStatus">修改状态</button>
     <vue-weekcalender 
      @on-slide="slideChangeHandle"
      @on-click="chooseDayItemHandle"
-     :option="options">
+     :option="options"
+     :reset="reset"
+     :status= "dayStatus">
     </vue-weekcalender>
   </div>
   <script src="https://cdn.bootcss.com/vue/2.5.16/vue.min.js"></script>
