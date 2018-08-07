@@ -244,6 +244,8 @@ var CalendarWeek = /** @class */ (function (_super) {
     __extends(CalendarWeek, _super);
     function CalendarWeek() {
         var _this_1 = _super !== null && _super.apply(this, arguments) || this;
+        _this_1.slideToFlag = false;
+        //日期描述
         _this_1.dateDescription = "";
         /**
          * 设置每月对应的天数
@@ -278,18 +280,26 @@ var CalendarWeek = /** @class */ (function (_super) {
         };
         //swiper的slide切换记录的索引
         _this_1.daySwiperIndex = 1;
+        //临时存放每天的记录标识
+        _this_1.tempDayStatus = {};
         //配置项的copy副本
         _this_1.tempOption = new __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */].CalenderOptions();
         //日历组件配置项数据
         _this_1.calenderOption = new __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */].CalenderOptions();
+        //每天的状态数据记录
+        _this_1.dayStatus = [];
         /**
-         * 多少个月日历
+         * 多少周
          */
         _this_1.weekCalender = new __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */].WeekCalender();
         /**
-         * 用于记录日历月份的数据，判断到底是否应该生成新的日历
+         * 用于记录每周数据，判断到底是否应该生成新的日历
          */
         _this_1.daySwiperIncludes = [];
+        //记录watch的每天日期的reset情况
+        _this_1.watchDayStatusData = {
+            items: null
+        };
         return _this_1;
     }
     Object.defineProperty(CalendarWeek.prototype, "calendarOptionComputed", {
@@ -298,6 +308,9 @@ var CalendarWeek = /** @class */ (function (_super) {
          * @return {string} 返回空字符串
          */
         get: function () {
+            if ((this.tempOption.currentDate || this.tempOption.beginDate
+                || this.tempOption.endDate) && this.reset)
+                return "";
             if (this.tempOption.beginDate != this.option.beginDate
                 || this.tempOption.endDate != this.option.endDate
                 || this.tempOption.currentDate != this.option.currentDate) {
@@ -314,6 +327,200 @@ var CalendarWeek = /** @class */ (function (_super) {
         enumerable: true,
         configurable: true
     });
+    Object.defineProperty(CalendarWeek.prototype, "calenderDayStatusComputed", {
+        /**
+         * 计算属性，监听status的变化
+         * @return {string} 返回空字符串
+         */
+        get: function () {
+            if (!this.reset)
+                return "";
+            this.watchDayStatusData.items = [];
+            for (var _i = 0, _a = this.status; _i < _a.length; _i++) {
+                var item = _a[_i];
+                this.watchDayStatusData.items.push(Object.assign({}, item));
+            }
+            return "";
+        },
+        enumerable: true,
+        configurable: true
+    });
+    /**
+     * 监听每天日期的状态数据变动
+     * @param {any} newVal 新值
+     * @param {any} oldVal 旧值
+     * @return {void} 无返回值
+     */
+    CalendarWeek.prototype.watchDayStatusChange = function (newVal, oldVal) {
+        if (!this.reset)
+            return;
+        //重置每天日期状态
+        var dayStatus = [];
+        for (var _i = 0, _a = newVal.items; _i < _a.length; _i++) {
+            var item = _a[_i];
+            dayStatus.push(Object.assign({}, item));
+        }
+        this.dayStatus = dayStatus;
+        this.resetDayStatusDataHandle(dayStatus);
+    };
+    /**
+     * 重置每天的日期状态
+     * @param {Array<Calender.DayStatus>} status 需要重置状态的日期数组
+     * @param {boolean} swiper 是否是swiper滑动触发，swiper滑动触发不需要重新计算slide的索引activeIndex
+     */
+    CalendarWeek.prototype.resetDayStatus = function (status, swiper) {
+        if (swiper === void 0) { swiper = false; }
+        //@ts-ignore
+        var dayStatus = status;
+        //重置每天状态
+        var today = Utils.dateFormat("yyyy-MM-dd", new Date());
+        var breakCycleFlag = false;
+        //假如要重置的reset没有，则要把原来的currentDate的状态重置
+        //比如：原来默认当前日期是 “今”，是默认选中的，当reset没有的时候
+        //需要把当前日期状态重置
+        if (!dayStatus || dayStatus.length <= 0) {
+            for (var _i = 0, _a = this.weekCalender.WeekDayList; _i < _a.length; _i++) {
+                var item = _a[_i];
+                for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
+                    var item1 = _c[_b];
+                    if (item1.currentDate == today) {
+                        item1.dayDesc = Utils.dateFormat("d", new Date());
+                        item1.dayClass = "day";
+                        breakCycleFlag = true;
+                        break;
+                    }
+                }
+                if (breakCycleFlag)
+                    break;
+            }
+            return;
+        }
+        //获取重置的日期默认选中的那一天，重新更新currentDate
+        var isDayExistSlide = false;
+        var currentDate = "";
+        for (var _d = 0, dayStatus_1 = dayStatus; _d < dayStatus_1.length; _d++) {
+            var item = dayStatus_1[_d];
+            if (item.default) {
+                currentDate = item.currentDate;
+                this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
+                this.tempOption.currentDate = item.currentDate;
+                break;
+            }
+        }
+        //重置每天的状态
+        for (var _e = 0, _f = this.weekCalender.WeekDayList; _e < _f.length; _e++) {
+            var item1 = _f[_e];
+            for (var _g = 0, _h = item1.dayList; _g < _h.length; _g++) {
+                var item2 = _h[_g];
+                if (!item2.dayDesc)
+                    continue;
+                item2.dayClass = "day";
+                item2.dayDesc = item2.oriDayDesc;
+                item2.enabled = false;
+            }
+        }
+        for (var _j = 0, dayStatus_2 = dayStatus; _j < dayStatus_2.length; _j++) {
+            var item = dayStatus_2[_j];
+            for (var _k = 0, _l = this.weekCalender.WeekDayList; _k < _l.length; _k++) {
+                var item1 = _l[_k];
+                for (var _m = 0, _o = item1.dayList; _m < _o.length; _m++) {
+                    var item2 = _o[_m];
+                    if (!item2.dayDesc)
+                        continue;
+                    if (item.default) { //存在默认的天数，则reset每天的状态
+                        if (item2.dayClass == "day current") {
+                            item2.dayClass = "day";
+                            if (item2.currentDate == today) {
+                                item2.dayDesc = Utils.dateFormat("d", new Date());
+                                item2.oriDayDesc = item2.dayDesc;
+                            }
+                        }
+                    }
+                    if (item2.currentDate != item.currentDate)
+                        continue;
+                    item2.dayDesc = item.dayDesc || item2.dayDesc;
+                    item2.oriDayDesc = item.dayDesc || item2.dayDesc;
+                    item2.dayClass = item.dayClass;
+                    item2.oriDayClass = item.dayClass;
+                    item2.enabled = item.enabled;
+                    if (item.default) { //如果当天是默认选中的话
+                        if (item.currentDate == today) {
+                            item2.dayDesc = "今";
+                            item2.oriDayDesc = item2.dayDesc;
+                            item2.dayClass = "day current";
+                        }
+                        else {
+                            item2.dayClass = "day current";
+                        }
+                        this.chooseDayItemHandle(item2, null);
+                    }
+                }
+            }
+        }
+        //假如是滑动日历的话，则不需要重新计算slide的索引activeIndex
+        //todo:计算slide的索引需要重新计算
+        if (currentDate && !swiper) {
+            var index = 0;
+            var breakCycleFlag_1 = false;
+            for (var _p = 0, _q = this.weekCalender.WeekDayList; _p < _q.length; _p++) {
+                var item = _q[_p];
+                index++;
+                for (var _r = 0, _s = item.dayList; _r < _s.length; _r++) {
+                    var item1 = _s[_r];
+                    if (item1.currentDate == currentDate) {
+                        breakCycleFlag_1 = true;
+                        break;
+                    }
+                }
+                if (breakCycleFlag_1)
+                    break;
+            }
+            console.log(this.daySwiper.activeIndex + " this  activeIndex ==== " + index);
+            if (this.daySwiper.activeIndex == index - 1) {
+                console.log(" this is no auto swiper =============");
+                return;
+            }
+            if (this.daySwiper.activeIndex == 0) {
+                this.daySwiper.slideTo(index - 1, 300);
+                this.daySwiper.activeIndex = index - 1;
+                this.daySwiper.realIndex = index - 1;
+            }
+            else {
+                this.daySwiper.slideTo(index - 1, 300);
+            }
+            this.slideToFlag = true;
+        }
+    };
+    /**
+     * 处理需要重置日期状态的数据，假如需要重置的日期不在已经生成的slide里面，重新
+     * 以默认选中的那一天为基准，重新生成日历
+     * @param {Array<Calender.DayStatus>} dayStatus 要重置的状态
+     * @return {void} 无返回值
+     */
+    CalendarWeek.prototype.resetDayStatusDataHandle = function (status) {
+        //@ts-ignore
+        var dayStatus = status;
+        //判断要重置的数据是否在生成的日历当中，假如要重置的状态不在已经生成的日期当中，
+        //则以当前重置的默认选中日期为当前日期，重新渲染日历组件
+        var currentDate = "";
+        for (var _i = 0, dayStatus_3 = dayStatus; _i < dayStatus_3.length; _i++) {
+            var item = dayStatus_3[_i];
+            if (item.default) {
+                currentDate = item.currentDate;
+                this.calenderOption.currentDate = Utils.createCorrectDate(item.currentDate);
+                this.tempOption.currentDate = item.currentDate;
+                break;
+            }
+        }
+        //要重置的日期最大的一天不在生成的slide块里面，则按照
+        //当前的重置的currentDate为基准，重新生成日历的slide块
+        if (!this.tempDayStatus[currentDate]) {
+            //重新生成日历
+            this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
+        }
+        //this.initialWeekCalenderOptions(Object.assign({}, this.calenderOption));
+        this.resetDayStatus(dayStatus);
+    };
     /**
      * 初始化周日历组件相关配置数据
      * @param {Calender.CalenderOptions} initCalenderData 初始化周日历组件的数据
@@ -326,6 +533,7 @@ var CalendarWeek = /** @class */ (function (_super) {
         this.weekCalender.WeekDayList.length = 0;
         this.daySwiperTempDate = "";
         this.daySwiperIndex = 1;
+        this.tempDayStatus = {};
         //重置daySwiper的索引
         if (this.daySwiper) {
             this.daySwiper.activeIndex = 1;
@@ -359,9 +567,14 @@ var CalendarWeek = /** @class */ (function (_super) {
             if (tempDate1 <= this.calenderOption.endDate && this.calenderOption.beginDate <= tempDate1) {
                 var dayModel = new __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */].DayModel();
                 dayModel.currentDate = Utils.dateFormat("yyyy-MM-dd", tempDate1);
+                //临时存放每天的记录标识
+                this.tempDayStatus[dayModel.currentDate] = 1;
                 dayModel.day = tempDate1.getDate();
                 dayModel.dayDesc = tempDate1.getDate().toString();
                 dayModel.oriDayDesc = dayModel.dayDesc;
+                //若设置了reset重置每天状态，则禁止enabled，让调用者通过设置status状态来设定可点击的日期
+                dayModel.enabled = this.reset ? false : true;
+                dayModel.oriEnabled = dayModel.enabled;
                 if (today == dayModel.currentDate && today == defaultDay) {
                     dayModel.dayDesc = "今";
                     dayModel.oriDayDesc = dayModel.dayDesc;
@@ -381,9 +594,15 @@ var CalendarWeek = /** @class */ (function (_super) {
             }
         }
         if (isRight)
-            this.weekCalender.WeekDayList.push({ dayList: dayList });
+            this.weekCalender.WeekDayList.push({
+                currentMonthDate: Utils.dateFormat("yyyy-MM-dd", beginDate),
+                dayList: dayList
+            });
         else {
-            this.weekCalender.WeekDayList.unshift({ dayList: dayList });
+            this.weekCalender.WeekDayList.unshift({
+                currentMonthDate: Utils.dateFormat("yyyy-MM-dd", beginDate),
+                dayList: dayList
+            });
         }
     };
     /**
@@ -426,7 +645,7 @@ var CalendarWeek = /** @class */ (function (_super) {
         //@ts-ignore
         this.daySwiper = this.$refs.daySwiper.swiper;
         this.daySwiper.on("slideChangeTransitionEnd", function () {
-            var date = this.slides.eq(this.activeIndex).find("div").attr("data-date");
+            var date = this.slides.eq(this.activeIndex).attr("data-date");
             if (_this.daySwiperTempDate == date) {
                 return;
             }
@@ -459,19 +678,30 @@ var CalendarWeek = /** @class */ (function (_super) {
      */
     CalendarWeek.prototype.slidePrevTransitionEnd = function (daySwiper) {
         var _this = this;
-        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
+        var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).attr("data-date");
         var chooseDate = null;
-        for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
-            var item = _a[_i];
-            for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
-                var item1 = _c[_b];
-                if (!item1.dayDesc)
-                    continue;
-                if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
-                    chooseDate = Utils.createCorrectDate(item1.currentDate);
+        var chooseDayItem = null;
+        var breakCycleFlag = false;
+        if (!_this.reset) {
+            for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
+                var item = _a[_i];
+                for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
+                    var item1 = _c[_b];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
+                        chooseDate = Utils.createCorrectDate(item1.currentDate);
+                        chooseDayItem = Object.assign({}, item1);
+                        breakCycleFlag = true;
+                        break;
+                    }
+                    // if (!_this.reset) {
+                    //   item1.dayDesc = item1.oriDayDesc;
+                    //   item1.dayClass = item1.oriDayClass;
+                    // }
                 }
-                item1.dayDesc = item1.oriDayDesc;
-                item1.dayClass = item1.oriDayClass;
+                if (breakCycleFlag)
+                    break;
             }
         }
         /*******************提前渲染上一周的日历 begin*****************/
@@ -488,29 +718,74 @@ var CalendarWeek = /** @class */ (function (_super) {
                 _this.daySwiperIndex += 1;
             }
         }
+        if (Utils.createCorrectDate(currentMonthDateStr) >= beginDate) {
+            _this.dateDescription = currentMonthDateStr;
+        }
+        else {
+            _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", beginDate);
+        }
         _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
         /*******************提前渲染上一周的日历 end*****************/
-        //如果是最前一周，则显示最前一周第一天
-        //否则，原来选的是周几，则显示周几
-        chooseDate.setDate(chooseDate.getDate() - 7);
-        var chooseDay = null;
-        for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
-            var item = _e[_d];
-            for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
-                var item1 = _g[_f];
-                if (!item1.dayDesc)
-                    continue;
-                if (chooseDate >= beginDate) {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
+            //如果是最前一周，则显示最前一周第一天
+            //否则，原来选的是周几，则显示周几
+            chooseDate.setDate(chooseDate.getDate() - 7);
+            var chooseDay = null;
+            var breakCycleFlag_2 = false;
+            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
+                var item = _e[_d];
+                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
+                    var item1 = _g[_f];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (chooseDate >= beginDate) {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+                    }
+                    else {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", beginDate);
+                    }
+                    if (item1.currentDate != chooseDay)
+                        continue;
+                    breakCycleFlag_2 = true;
+                    item1.dayClass = "day current";
+                    _this.chooseDayItemHandle(item1, null);
+                    break;
+                }
+                if (breakCycleFlag_2)
+                    break;
+            }
+        }
+        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
+            var includes = {};
+            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
+            includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            for (var i = 1; i <= 6; i++) {
+                tempBegin.setDate(tempBegin.getDate() + 1);
+                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            }
+            var isExistDay = false;
+            //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
+            for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
+                var item = _j[_h];
+                if (includes.hasOwnProperty(item.currentDate) && !isExistDay) {
+                    item.default = true;
+                    isExistDay = true;
+                    //break;
                 }
                 else {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", beginDate);
+                    //if (!_this.slideToFlag) {
+                    //_this.slideToFlag = false;
+                    item.default = false;
+                    //}
                 }
-                if (item1.currentDate != chooseDay)
-                    continue;
-                item1.dayClass = "day current";
-                _this.chooseDayItemHandle(item1, null);
-                break;
+            }
+            if (isExistDay) {
+                if (!_this.slideToFlag) { //没有自动滑动
+                    _this.resetDayStatus(_this.dayStatus, true);
+                }
+                else { //自动滑动
+                    _this.slideToFlag = false;
+                }
             }
         }
     };
@@ -523,17 +798,28 @@ var CalendarWeek = /** @class */ (function (_super) {
         var _this = this;
         var currentMonthDateStr = daySwiper.slides.eq(daySwiper.activeIndex).find("div").attr("data-date");
         var chooseDate = null;
-        for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
-            var item = _a[_i];
-            for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
-                var item1 = _c[_b];
-                if (!item1.dayDesc)
-                    continue;
-                if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
-                    chooseDate = Utils.createCorrectDate(item1.currentDate);
+        var chooseDayItem = null;
+        var breakCycleFlag = false;
+        if (!_this.reset) {
+            for (var _i = 0, _a = _this.weekCalender.WeekDayList; _i < _a.length; _i++) {
+                var item = _a[_i];
+                for (var _b = 0, _c = item.dayList; _b < _c.length; _b++) {
+                    var item1 = _c[_b];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (item1.dayClass.indexOf("current") > -1) { //取出选中的一天
+                        chooseDate = Utils.createCorrectDate(item1.currentDate);
+                        chooseDayItem = Object.assign({}, item1);
+                        breakCycleFlag = true;
+                        break;
+                    }
+                    // if (!_this.reset) {
+                    //   item1.dayDesc = item1.oriDayDesc;
+                    //   item1.dayClass = item1.oriDayClass;
+                    // }
                 }
-                item1.dayDesc = item1.oriDayDesc;
-                item1.dayClass = item1.oriDayClass;
+                if (breakCycleFlag)
+                    break;
             }
         }
         /*******************提前渲染下一周的日历 begin*****************/
@@ -547,29 +833,74 @@ var CalendarWeek = /** @class */ (function (_super) {
                 _this.daySwiperIncludes.push(dateStr);
             }
         }
+        if (Utils.createCorrectDate(currentMonthDateStr) <= endDate) {
+            _this.dateDescription = currentMonthDateStr;
+        }
+        else {
+            _this.dateDescription = Utils.dateFormat("yyyy-MM-dd", endDate);
+        }
         _this.swipeWeekCalenderSlideHandle(currentMonthDateStr, true);
         /*******************提前渲染下一周的日历 end*****************/
-        //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
-        //否则，原来选的是周几，则显示周几
-        chooseDate.setDate(chooseDate.getDate() + 7);
-        var chooseDay = null;
-        for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
-            var item = _e[_d];
-            for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
-                var item1 = _g[_f];
-                if (!item1.dayDesc)
-                    continue;
-                if (chooseDate <= endDate) {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+        if (!_this.reset) { //没有定义每天日期的状态的话，按照组件默认操作走
+            //默认显示的日期，如果是最后一周，则显示最后一周的最后一天，
+            //否则，原来选的是周几，则显示周几
+            chooseDate.setDate(chooseDate.getDate() + 7);
+            var chooseDay = null;
+            var breakCycleFlag_3 = false;
+            for (var _d = 0, _e = _this.weekCalender.WeekDayList; _d < _e.length; _d++) {
+                var item = _e[_d];
+                for (var _f = 0, _g = item.dayList; _f < _g.length; _f++) {
+                    var item1 = _g[_f];
+                    if (!item1.dayDesc)
+                        continue;
+                    if (chooseDate <= endDate) {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", chooseDate);
+                    }
+                    else {
+                        chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
+                    }
+                    if (item1.currentDate != chooseDay)
+                        continue;
+                    breakCycleFlag_3 = true;
+                    item1.dayClass = "day current";
+                    _this.chooseDayItemHandle(item1, null);
+                    break;
+                }
+                if (breakCycleFlag_3)
+                    break;
+            }
+        }
+        else { //判断原来选中的日期是否处于当前slide块内，如果处于的话，触发click操作
+            var includes = {};
+            var tempBegin = Utils.createCorrectDate(currentMonthDateStr);
+            includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            for (var i = 1; i <= 6; i++) {
+                tempBegin.setDate(tempBegin.getDate() + 1);
+                includes[Utils.dateFormat("yyyy-MM-dd", tempBegin)] = 1;
+            }
+            var isExistDay = false;
+            //todo:reset状态的滑动，需要根据dayStatus自行处理currentDate
+            for (var _h = 0, _j = _this.dayStatus; _h < _j.length; _h++) {
+                var item = _j[_h];
+                if (includes.hasOwnProperty(item.currentDate) && !isExistDay) {
+                    item.default = true;
+                    isExistDay = true;
+                    //break;
                 }
                 else {
-                    chooseDay = Utils.dateFormat("yyyy-MM-dd", endDate);
+                    //if (!_this.slideToFlag) {
+                    //_this.slideToFlag = false;
+                    item.default = false;
+                    //}
                 }
-                if (item1.currentDate != chooseDay)
-                    continue;
-                item1.dayClass = "day current";
-                _this.chooseDayItemHandle(item1, null);
-                break;
+            }
+            if (isExistDay) {
+                if (!_this.slideToFlag) { //没有自动滑动
+                    _this.resetDayStatus(_this.dayStatus, true);
+                }
+                else { //自动滑动
+                    _this.slideToFlag = false;
+                }
             }
         }
     };
@@ -590,10 +921,11 @@ var CalendarWeek = /** @class */ (function (_super) {
      */
     CalendarWeek.prototype.chooseDayItemHandle = function (dayItem, event) {
         if (event === void 0) { event = null; }
-        this.dateDescription = dayItem.currentDate;
         if (!dayItem.currentDate || !dayItem.enabled)
             return;
         var _this = this;
+        this.dateDescription = dayItem.currentDate;
+        this.$emit("on-click", dayItem);
         //把选中的时间日期赋值给calenderChoosedModel，发送给外部调用者
         for (var _i = 0, _a = this.weekCalender.WeekDayList; _i < _a.length; _i++) {
             var item = _a[_i];
@@ -619,19 +951,27 @@ var CalendarWeek = /** @class */ (function (_super) {
         __metadata("design:type", typeof (_a = (typeof __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */] !== "undefined" && __WEBPACK_IMPORTED_MODULE_3__CalenderModel__["a" /* Calender */]).CalenderOptions) === "function" && _a || Object)
     ], CalendarWeek.prototype, "option", void 0);
     __decorate([
-        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["b" /* Emit */])("on-slide"),
+        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["a" /* Prop */])(),
+        __metadata("design:type", typeof (_b = typeof Array !== "undefined" && Array) === "function" && _b || Object)
+    ], CalendarWeek.prototype, "status", void 0);
+    __decorate([
+        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["a" /* Prop */])(),
+        __metadata("design:type", Boolean)
+    ], CalendarWeek.prototype, "reset", void 0);
+    __decorate([
+        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["b" /* Watch */])("watchDayStatusData", { deep: true }),
+        __metadata("design:type", Function),
+        __metadata("design:paramtypes", [Object, Object]),
+        __metadata("design:returntype", void 0)
+    ], CalendarWeek.prototype, "watchDayStatusChange", null);
+    __decorate([
+        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["c" /* Emit */])("on-slide"),
         __metadata("design:type", Function),
         __metadata("design:paramtypes", [String, Boolean]),
         __metadata("design:returntype", void 0)
     ], CalendarWeek.prototype, "swipeWeekCalenderSlideHandle", null);
-    __decorate([
-        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["b" /* Emit */])("on-click"),
-        __metadata("design:type", Function),
-        __metadata("design:paramtypes", [Object, typeof (_b = typeof Event !== "undefined" && Event) === "function" && _b || Object]),
-        __metadata("design:returntype", void 0)
-    ], CalendarWeek.prototype, "chooseDayItemHandle", null);
     CalendarWeek = __decorate([
-        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["c" /* Component */])({
+        __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["d" /* Component */])({
             template: __webpack_require__(16),
             components: {
                 swiper: __WEBPACK_IMPORTED_MODULE_4_vue_awesome_swiper__["swiper"],
@@ -640,12 +980,14 @@ var CalendarWeek = /** @class */ (function (_super) {
         })
         /**
          * 周日历组件
+         * 日历的生成标准是以默认选中的currentDate为基准
+         * 生成当前currentDate所在的一周数据、上一周数组、下一周数据
          * @class
          * @extends {Vue}
          */
     ], CalendarWeek);
     return CalendarWeek;
-}(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["d" /* Vue */]));
+}(__WEBPACK_IMPORTED_MODULE_2_vue_property_decorator__["e" /* Vue */]));
 /* harmony default export */ __webpack_exports__["a"] = (CalendarWeek);
 
 
@@ -683,7 +1025,7 @@ exports = module.exports = __webpack_require__(1)(false);
 
 
 // module
-exports.push([module.i, "/**\n * Swiper 4.3.3\n * Most modern mobile touch slider and framework with hardware accelerated transitions\n * http://www.idangero.us/swiper/\n *\n * Copyright 2014-2018 Vladimir Kharlampidi\n *\n * Released under the MIT License\n *\n * Released on: June 5, 2018\n */\n.swiper-container{margin:0 auto;position:relative;overflow:hidden;list-style:none;padding:0;z-index:1}.swiper-container-no-flexbox .swiper-slide{float:left}.swiper-container-vertical>.swiper-wrapper{-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column}.swiper-wrapper{position:relative;width:100%;height:100%;z-index:1;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-transition-property:-webkit-transform;transition-property:-webkit-transform;-o-transition-property:transform;transition-property:transform;transition-property:transform,-webkit-transform;-webkit-box-sizing:content-box;box-sizing:content-box}.swiper-container-android .swiper-slide,.swiper-wrapper{-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0)}.swiper-container-multirow>.swiper-wrapper{-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap}.swiper-container-free-mode>.swiper-wrapper{-webkit-transition-timing-function:ease-out;-o-transition-timing-function:ease-out;transition-timing-function:ease-out;margin:0 auto}.swiper-slide{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;width:100%;height:100%;position:relative;-webkit-transition-property:-webkit-transform;transition-property:-webkit-transform;-o-transition-property:transform;transition-property:transform;transition-property:transform,-webkit-transform}.swiper-invisible-blank-slide{visibility:hidden}.swiper-container-autoheight,.swiper-container-autoheight .swiper-slide{height:auto}.swiper-container-autoheight .swiper-wrapper{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start;-webkit-transition-property:height,-webkit-transform;transition-property:height,-webkit-transform;-o-transition-property:transform,height;transition-property:transform,height;transition-property:transform,height,-webkit-transform}.swiper-container-3d{-webkit-perspective:1200px;perspective:1200px}.swiper-container-3d .swiper-cube-shadow,.swiper-container-3d .swiper-slide,.swiper-container-3d .swiper-slide-shadow-bottom,.swiper-container-3d .swiper-slide-shadow-left,.swiper-container-3d .swiper-slide-shadow-right,.swiper-container-3d .swiper-slide-shadow-top,.swiper-container-3d .swiper-wrapper{-webkit-transform-style:preserve-3d;transform-style:preserve-3d}.swiper-container-3d .swiper-slide-shadow-bottom,.swiper-container-3d .swiper-slide-shadow-left,.swiper-container-3d .swiper-slide-shadow-right,.swiper-container-3d .swiper-slide-shadow-top{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:10}.swiper-container-3d .swiper-slide-shadow-left{background-image:-webkit-gradient(linear,right top,left top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(right,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(right,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to left,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-right{background-image:-webkit-gradient(linear,left top,right top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(left,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(left,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to right,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-top{background-image:-webkit-gradient(linear,left bottom,left top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(bottom,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(bottom,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to top,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-bottom{background-image:-webkit-gradient(linear,left top,left bottom,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(top,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(top,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to bottom,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-wp8-horizontal,.swiper-container-wp8-horizontal>.swiper-wrapper{-ms-touch-action:pan-y;touch-action:pan-y}.swiper-container-wp8-vertical,.swiper-container-wp8-vertical>.swiper-wrapper{-ms-touch-action:pan-x;touch-action:pan-x}.swiper-button-next,.swiper-button-prev{position:absolute;top:50%;width:27px;height:44px;margin-top:-22px;z-index:10;cursor:pointer;background-size:27px 44px;background-position:center;background-repeat:no-repeat}.swiper-button-next.swiper-button-disabled,.swiper-button-prev.swiper-button-disabled{opacity:.35;cursor:auto;pointer-events:none}.swiper-button-prev,.swiper-container-rtl .swiper-button-next{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23007aff'%2F%3E%3C%2Fsvg%3E\");left:10px;right:auto}.swiper-button-next,.swiper-container-rtl .swiper-button-prev{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23007aff'%2F%3E%3C%2Fsvg%3E\");right:10px;left:auto}.swiper-button-prev.swiper-button-white,.swiper-container-rtl .swiper-button-next.swiper-button-white{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23ffffff'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-next.swiper-button-white,.swiper-container-rtl .swiper-button-prev.swiper-button-white{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23ffffff'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-prev.swiper-button-black,.swiper-container-rtl .swiper-button-next.swiper-button-black{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-next.swiper-button-black,.swiper-container-rtl .swiper-button-prev.swiper-button-black{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-lock{display:none}.swiper-pagination{position:absolute;text-align:center;-webkit-transition:.3s opacity;-o-transition:.3s opacity;transition:.3s opacity;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);z-index:10}.swiper-pagination.swiper-pagination-hidden{opacity:0}.swiper-container-horizontal>.swiper-pagination-bullets,.swiper-pagination-custom,.swiper-pagination-fraction{bottom:10px;left:0;width:100%}.swiper-pagination-bullets-dynamic{overflow:hidden;font-size:0}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33);position:relative}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active{-webkit-transform:scale(1);-ms-transform:scale(1);transform:scale(1)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-main{-webkit-transform:scale(1);-ms-transform:scale(1);transform:scale(1)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-prev{-webkit-transform:scale(.66);-ms-transform:scale(.66);transform:scale(.66)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-prev-prev{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-next{-webkit-transform:scale(.66);-ms-transform:scale(.66);transform:scale(.66)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-next-next{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33)}.swiper-pagination-bullet{width:8px;height:8px;display:inline-block;border-radius:100%;background:#000;opacity:.2}button.swiper-pagination-bullet{border:none;margin:0;padding:0;-webkit-box-shadow:none;box-shadow:none;-webkit-appearance:none;-moz-appearance:none;appearance:none}.swiper-pagination-clickable .swiper-pagination-bullet{cursor:pointer}.swiper-pagination-bullet-active{opacity:1;background:#007aff}.swiper-container-vertical>.swiper-pagination-bullets{right:10px;top:50%;-webkit-transform:translate3d(0,-50%,0);transform:translate3d(0,-50%,0)}.swiper-container-vertical>.swiper-pagination-bullets .swiper-pagination-bullet{margin:6px 0;display:block}.swiper-container-vertical>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic{top:50%;-webkit-transform:translateY(-50%);-ms-transform:translateY(-50%);transform:translateY(-50%);width:8px}.swiper-container-vertical>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{display:inline-block;-webkit-transition:.2s top,.2s -webkit-transform;transition:.2s top,.2s -webkit-transform;-o-transition:.2s transform,.2s top;transition:.2s transform,.2s top;transition:.2s transform,.2s top,.2s -webkit-transform}.swiper-container-horizontal>.swiper-pagination-bullets .swiper-pagination-bullet{margin:0 4px}.swiper-container-horizontal>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic{left:50%;-webkit-transform:translateX(-50%);-ms-transform:translateX(-50%);transform:translateX(-50%);white-space:nowrap}.swiper-container-horizontal>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transition:.2s left,.2s -webkit-transform;transition:.2s left,.2s -webkit-transform;-o-transition:.2s transform,.2s left;transition:.2s transform,.2s left;transition:.2s transform,.2s left,.2s -webkit-transform}.swiper-container-horizontal.swiper-container-rtl>.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transition:.2s right,.2s -webkit-transform;transition:.2s right,.2s -webkit-transform;-o-transition:.2s transform,.2s right;transition:.2s transform,.2s right;transition:.2s transform,.2s right,.2s -webkit-transform}.swiper-pagination-progressbar{background:rgba(0,0,0,.25);position:absolute}.swiper-pagination-progressbar .swiper-pagination-progressbar-fill{background:#007aff;position:absolute;left:0;top:0;width:100%;height:100%;-webkit-transform:scale(0);-ms-transform:scale(0);transform:scale(0);-webkit-transform-origin:left top;-ms-transform-origin:left top;transform-origin:left top}.swiper-container-rtl .swiper-pagination-progressbar .swiper-pagination-progressbar-fill{-webkit-transform-origin:right top;-ms-transform-origin:right top;transform-origin:right top}.swiper-container-horizontal>.swiper-pagination-progressbar,.swiper-container-vertical>.swiper-pagination-progressbar.swiper-pagination-progressbar-opposite{width:100%;height:4px;left:0;top:0}.swiper-container-horizontal>.swiper-pagination-progressbar.swiper-pagination-progressbar-opposite,.swiper-container-vertical>.swiper-pagination-progressbar{width:4px;height:100%;left:0;top:0}.swiper-pagination-white .swiper-pagination-bullet-active{background:#fff}.swiper-pagination-progressbar.swiper-pagination-white{background:rgba(255,255,255,.25)}.swiper-pagination-progressbar.swiper-pagination-white .swiper-pagination-progressbar-fill{background:#fff}.swiper-pagination-black .swiper-pagination-bullet-active{background:#000}.swiper-pagination-progressbar.swiper-pagination-black{background:rgba(0,0,0,.25)}.swiper-pagination-progressbar.swiper-pagination-black .swiper-pagination-progressbar-fill{background:#000}.swiper-pagination-lock{display:none}.swiper-scrollbar{border-radius:10px;position:relative;-ms-touch-action:none;background:rgba(0,0,0,.1)}.swiper-container-horizontal>.swiper-scrollbar{position:absolute;left:1%;bottom:3px;z-index:50;height:5px;width:98%}.swiper-container-vertical>.swiper-scrollbar{position:absolute;right:3px;top:1%;z-index:50;width:5px;height:98%}.swiper-scrollbar-drag{height:100%;width:100%;position:relative;background:rgba(0,0,0,.5);border-radius:10px;left:0;top:0}.swiper-scrollbar-cursor-drag{cursor:move}.swiper-scrollbar-lock{display:none}.swiper-zoom-container{width:100%;height:100%;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;text-align:center}.swiper-zoom-container>canvas,.swiper-zoom-container>img,.swiper-zoom-container>svg{max-width:100%;max-height:100%;-o-object-fit:contain;object-fit:contain}.swiper-slide-zoomed{cursor:move}.swiper-lazy-preloader{width:42px;height:42px;position:absolute;left:50%;top:50%;margin-left:-21px;margin-top:-21px;z-index:10;-webkit-transform-origin:50%;-ms-transform-origin:50%;transform-origin:50%;-webkit-animation:swiper-preloader-spin 1s steps(12,end) infinite;animation:swiper-preloader-spin 1s steps(12,end) infinite}.swiper-lazy-preloader:after{display:block;content:'';width:100%;height:100%;background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20viewBox%3D'0%200%20120%20120'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20xmlns%3Axlink%3D'http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink'%3E%3Cdefs%3E%3Cline%20id%3D'l'%20x1%3D'60'%20x2%3D'60'%20y1%3D'7'%20y2%3D'27'%20stroke%3D'%236c6c6c'%20stroke-width%3D'11'%20stroke-linecap%3D'round'%2F%3E%3C%2Fdefs%3E%3Cg%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(30%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(60%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(90%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(120%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(150%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.37'%20transform%3D'rotate(180%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.46'%20transform%3D'rotate(210%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.56'%20transform%3D'rotate(240%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.66'%20transform%3D'rotate(270%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.75'%20transform%3D'rotate(300%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.85'%20transform%3D'rotate(330%2060%2C60)'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\");background-position:50%;background-size:100%;background-repeat:no-repeat}.swiper-lazy-preloader-white:after{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20viewBox%3D'0%200%20120%20120'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20xmlns%3Axlink%3D'http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink'%3E%3Cdefs%3E%3Cline%20id%3D'l'%20x1%3D'60'%20x2%3D'60'%20y1%3D'7'%20y2%3D'27'%20stroke%3D'%23fff'%20stroke-width%3D'11'%20stroke-linecap%3D'round'%2F%3E%3C%2Fdefs%3E%3Cg%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(30%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(60%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(90%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(120%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(150%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.37'%20transform%3D'rotate(180%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.46'%20transform%3D'rotate(210%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.56'%20transform%3D'rotate(240%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.66'%20transform%3D'rotate(270%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.75'%20transform%3D'rotate(300%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.85'%20transform%3D'rotate(330%2060%2C60)'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\")}@-webkit-keyframes swiper-preloader-spin{100%{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}@keyframes swiper-preloader-spin{100%{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}.swiper-container .swiper-notification{position:absolute;left:0;top:0;pointer-events:none;opacity:0;z-index:-1000}.swiper-container-fade.swiper-container-free-mode .swiper-slide{-webkit-transition-timing-function:ease-out;-o-transition-timing-function:ease-out;transition-timing-function:ease-out}.swiper-container-fade .swiper-slide{pointer-events:none;-webkit-transition-property:opacity;-o-transition-property:opacity;transition-property:opacity}.swiper-container-fade .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-fade .swiper-slide-active,.swiper-container-fade .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-cube{overflow:visible}.swiper-container-cube .swiper-slide{pointer-events:none;-webkit-backface-visibility:hidden;backface-visibility:hidden;z-index:1;visibility:hidden;-webkit-transform-origin:0 0;-ms-transform-origin:0 0;transform-origin:0 0;width:100%;height:100%}.swiper-container-cube .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-cube.swiper-container-rtl .swiper-slide{-webkit-transform-origin:100% 0;-ms-transform-origin:100% 0;transform-origin:100% 0}.swiper-container-cube .swiper-slide-active,.swiper-container-cube .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-cube .swiper-slide-active,.swiper-container-cube .swiper-slide-next,.swiper-container-cube .swiper-slide-next+.swiper-slide,.swiper-container-cube .swiper-slide-prev{pointer-events:auto;visibility:visible}.swiper-container-cube .swiper-slide-shadow-bottom,.swiper-container-cube .swiper-slide-shadow-left,.swiper-container-cube .swiper-slide-shadow-right,.swiper-container-cube .swiper-slide-shadow-top{z-index:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}.swiper-container-cube .swiper-cube-shadow{position:absolute;left:0;bottom:0;width:100%;height:100%;background:#000;opacity:.6;-webkit-filter:blur(50px);filter:blur(50px);z-index:0}.swiper-container-flip{overflow:visible}.swiper-container-flip .swiper-slide{pointer-events:none;-webkit-backface-visibility:hidden;backface-visibility:hidden;z-index:1}.swiper-container-flip .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-flip .swiper-slide-active,.swiper-container-flip .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-flip .swiper-slide-shadow-bottom,.swiper-container-flip .swiper-slide-shadow-left,.swiper-container-flip .swiper-slide-shadow-right,.swiper-container-flip .swiper-slide-shadow-top{z-index:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}.swiper-container-coverflow .swiper-wrapper{-ms-perspective:1200px}", ""]);
+exports.push([module.i, "/**\n * Swiper 4.3.5\n * Most modern mobile touch slider and framework with hardware accelerated transitions\n * http://www.idangero.us/swiper/\n *\n * Copyright 2014-2018 Vladimir Kharlampidi\n *\n * Released under the MIT License\n *\n * Released on: July 31, 2018\n */\n.swiper-container{margin:0 auto;position:relative;overflow:hidden;list-style:none;padding:0;z-index:1}.swiper-container-no-flexbox .swiper-slide{float:left}.swiper-container-vertical>.swiper-wrapper{-webkit-box-orient:vertical;-webkit-box-direction:normal;-webkit-flex-direction:column;-ms-flex-direction:column;flex-direction:column}.swiper-wrapper{position:relative;width:100%;height:100%;z-index:1;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-transition-property:-webkit-transform;transition-property:-webkit-transform;-o-transition-property:transform;transition-property:transform;transition-property:transform,-webkit-transform;-webkit-box-sizing:content-box;box-sizing:content-box}.swiper-container-android .swiper-slide,.swiper-wrapper{-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0)}.swiper-container-multirow>.swiper-wrapper{-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap}.swiper-container-free-mode>.swiper-wrapper{-webkit-transition-timing-function:ease-out;-o-transition-timing-function:ease-out;transition-timing-function:ease-out;margin:0 auto}.swiper-slide{-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;width:100%;height:100%;position:relative;-webkit-transition-property:-webkit-transform;transition-property:-webkit-transform;-o-transition-property:transform;transition-property:transform;transition-property:transform,-webkit-transform}.swiper-invisible-blank-slide{visibility:hidden}.swiper-container-autoheight,.swiper-container-autoheight .swiper-slide{height:auto}.swiper-container-autoheight .swiper-wrapper{-webkit-box-align:start;-webkit-align-items:flex-start;-ms-flex-align:start;align-items:flex-start;-webkit-transition-property:height,-webkit-transform;transition-property:height,-webkit-transform;-o-transition-property:transform,height;transition-property:transform,height;transition-property:transform,height,-webkit-transform}.swiper-container-3d{-webkit-perspective:1200px;perspective:1200px}.swiper-container-3d .swiper-cube-shadow,.swiper-container-3d .swiper-slide,.swiper-container-3d .swiper-slide-shadow-bottom,.swiper-container-3d .swiper-slide-shadow-left,.swiper-container-3d .swiper-slide-shadow-right,.swiper-container-3d .swiper-slide-shadow-top,.swiper-container-3d .swiper-wrapper{-webkit-transform-style:preserve-3d;transform-style:preserve-3d}.swiper-container-3d .swiper-slide-shadow-bottom,.swiper-container-3d .swiper-slide-shadow-left,.swiper-container-3d .swiper-slide-shadow-right,.swiper-container-3d .swiper-slide-shadow-top{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:10}.swiper-container-3d .swiper-slide-shadow-left{background-image:-webkit-gradient(linear,right top,left top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(right,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(right,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to left,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-right{background-image:-webkit-gradient(linear,left top,right top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(left,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(left,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to right,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-top{background-image:-webkit-gradient(linear,left bottom,left top,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(bottom,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(bottom,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to top,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-3d .swiper-slide-shadow-bottom{background-image:-webkit-gradient(linear,left top,left bottom,from(rgba(0,0,0,.5)),to(rgba(0,0,0,0)));background-image:-webkit-linear-gradient(top,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:-o-linear-gradient(top,rgba(0,0,0,.5),rgba(0,0,0,0));background-image:linear-gradient(to bottom,rgba(0,0,0,.5),rgba(0,0,0,0))}.swiper-container-wp8-horizontal,.swiper-container-wp8-horizontal>.swiper-wrapper{-ms-touch-action:pan-y;touch-action:pan-y}.swiper-container-wp8-vertical,.swiper-container-wp8-vertical>.swiper-wrapper{-ms-touch-action:pan-x;touch-action:pan-x}.swiper-button-next,.swiper-button-prev{position:absolute;top:50%;width:27px;height:44px;margin-top:-22px;z-index:10;cursor:pointer;background-size:27px 44px;background-position:center;background-repeat:no-repeat}.swiper-button-next.swiper-button-disabled,.swiper-button-prev.swiper-button-disabled{opacity:.35;cursor:auto;pointer-events:none}.swiper-button-prev,.swiper-container-rtl .swiper-button-next{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23007aff'%2F%3E%3C%2Fsvg%3E\");left:10px;right:auto}.swiper-button-next,.swiper-container-rtl .swiper-button-prev{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23007aff'%2F%3E%3C%2Fsvg%3E\");right:10px;left:auto}.swiper-button-prev.swiper-button-white,.swiper-container-rtl .swiper-button-next.swiper-button-white{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23ffffff'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-next.swiper-button-white,.swiper-container-rtl .swiper-button-prev.swiper-button-white{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23ffffff'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-prev.swiper-button-black,.swiper-container-rtl .swiper-button-next.swiper-button-black{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M0%2C22L22%2C0l2.1%2C2.1L4.2%2C22l19.9%2C19.9L22%2C44L0%2C22L0%2C22L0%2C22z'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-next.swiper-button-black,.swiper-container-rtl .swiper-button-prev.swiper-button-black{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2027%2044'%3E%3Cpath%20d%3D'M27%2C22L27%2C22L5%2C44l-2.1-2.1L22.8%2C22L2.9%2C2.1L5%2C0L27%2C22L27%2C22z'%20fill%3D'%23000000'%2F%3E%3C%2Fsvg%3E\")}.swiper-button-lock{display:none}.swiper-pagination{position:absolute;text-align:center;-webkit-transition:.3s opacity;-o-transition:.3s opacity;transition:.3s opacity;-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0);z-index:10}.swiper-pagination.swiper-pagination-hidden{opacity:0}.swiper-container-horizontal>.swiper-pagination-bullets,.swiper-pagination-custom,.swiper-pagination-fraction{bottom:10px;left:0;width:100%}.swiper-pagination-bullets-dynamic{overflow:hidden;font-size:0}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33);position:relative}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active{-webkit-transform:scale(1);-ms-transform:scale(1);transform:scale(1)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-main{-webkit-transform:scale(1);-ms-transform:scale(1);transform:scale(1)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-prev{-webkit-transform:scale(.66);-ms-transform:scale(.66);transform:scale(.66)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-prev-prev{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-next{-webkit-transform:scale(.66);-ms-transform:scale(.66);transform:scale(.66)}.swiper-pagination-bullets-dynamic .swiper-pagination-bullet-active-next-next{-webkit-transform:scale(.33);-ms-transform:scale(.33);transform:scale(.33)}.swiper-pagination-bullet{width:8px;height:8px;display:inline-block;border-radius:100%;background:#000;opacity:.2}button.swiper-pagination-bullet{border:none;margin:0;padding:0;-webkit-box-shadow:none;box-shadow:none;-webkit-appearance:none;-moz-appearance:none;appearance:none}.swiper-pagination-clickable .swiper-pagination-bullet{cursor:pointer}.swiper-pagination-bullet-active{opacity:1;background:#007aff}.swiper-container-vertical>.swiper-pagination-bullets{right:10px;top:50%;-webkit-transform:translate3d(0,-50%,0);transform:translate3d(0,-50%,0)}.swiper-container-vertical>.swiper-pagination-bullets .swiper-pagination-bullet{margin:6px 0;display:block}.swiper-container-vertical>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic{top:50%;-webkit-transform:translateY(-50%);-ms-transform:translateY(-50%);transform:translateY(-50%);width:8px}.swiper-container-vertical>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{display:inline-block;-webkit-transition:.2s top,.2s -webkit-transform;transition:.2s top,.2s -webkit-transform;-o-transition:.2s transform,.2s top;transition:.2s transform,.2s top;transition:.2s transform,.2s top,.2s -webkit-transform}.swiper-container-horizontal>.swiper-pagination-bullets .swiper-pagination-bullet{margin:0 4px}.swiper-container-horizontal>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic{left:50%;-webkit-transform:translateX(-50%);-ms-transform:translateX(-50%);transform:translateX(-50%);white-space:nowrap}.swiper-container-horizontal>.swiper-pagination-bullets.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transition:.2s left,.2s -webkit-transform;transition:.2s left,.2s -webkit-transform;-o-transition:.2s transform,.2s left;transition:.2s transform,.2s left;transition:.2s transform,.2s left,.2s -webkit-transform}.swiper-container-horizontal.swiper-container-rtl>.swiper-pagination-bullets-dynamic .swiper-pagination-bullet{-webkit-transition:.2s right,.2s -webkit-transform;transition:.2s right,.2s -webkit-transform;-o-transition:.2s transform,.2s right;transition:.2s transform,.2s right;transition:.2s transform,.2s right,.2s -webkit-transform}.swiper-pagination-progressbar{background:rgba(0,0,0,.25);position:absolute}.swiper-pagination-progressbar .swiper-pagination-progressbar-fill{background:#007aff;position:absolute;left:0;top:0;width:100%;height:100%;-webkit-transform:scale(0);-ms-transform:scale(0);transform:scale(0);-webkit-transform-origin:left top;-ms-transform-origin:left top;transform-origin:left top}.swiper-container-rtl .swiper-pagination-progressbar .swiper-pagination-progressbar-fill{-webkit-transform-origin:right top;-ms-transform-origin:right top;transform-origin:right top}.swiper-container-horizontal>.swiper-pagination-progressbar,.swiper-container-vertical>.swiper-pagination-progressbar.swiper-pagination-progressbar-opposite{width:100%;height:4px;left:0;top:0}.swiper-container-horizontal>.swiper-pagination-progressbar.swiper-pagination-progressbar-opposite,.swiper-container-vertical>.swiper-pagination-progressbar{width:4px;height:100%;left:0;top:0}.swiper-pagination-white .swiper-pagination-bullet-active{background:#fff}.swiper-pagination-progressbar.swiper-pagination-white{background:rgba(255,255,255,.25)}.swiper-pagination-progressbar.swiper-pagination-white .swiper-pagination-progressbar-fill{background:#fff}.swiper-pagination-black .swiper-pagination-bullet-active{background:#000}.swiper-pagination-progressbar.swiper-pagination-black{background:rgba(0,0,0,.25)}.swiper-pagination-progressbar.swiper-pagination-black .swiper-pagination-progressbar-fill{background:#000}.swiper-pagination-lock{display:none}.swiper-scrollbar{border-radius:10px;position:relative;-ms-touch-action:none;background:rgba(0,0,0,.1)}.swiper-container-horizontal>.swiper-scrollbar{position:absolute;left:1%;bottom:3px;z-index:50;height:5px;width:98%}.swiper-container-vertical>.swiper-scrollbar{position:absolute;right:3px;top:1%;z-index:50;width:5px;height:98%}.swiper-scrollbar-drag{height:100%;width:100%;position:relative;background:rgba(0,0,0,.5);border-radius:10px;left:0;top:0}.swiper-scrollbar-cursor-drag{cursor:move}.swiper-scrollbar-lock{display:none}.swiper-zoom-container{width:100%;height:100%;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-pack:center;-webkit-justify-content:center;-ms-flex-pack:center;justify-content:center;-webkit-box-align:center;-webkit-align-items:center;-ms-flex-align:center;align-items:center;text-align:center}.swiper-zoom-container>canvas,.swiper-zoom-container>img,.swiper-zoom-container>svg{max-width:100%;max-height:100%;-o-object-fit:contain;object-fit:contain}.swiper-slide-zoomed{cursor:move}.swiper-lazy-preloader{width:42px;height:42px;position:absolute;left:50%;top:50%;margin-left:-21px;margin-top:-21px;z-index:10;-webkit-transform-origin:50%;-ms-transform-origin:50%;transform-origin:50%;-webkit-animation:swiper-preloader-spin 1s steps(12,end) infinite;animation:swiper-preloader-spin 1s steps(12,end) infinite}.swiper-lazy-preloader:after{display:block;content:'';width:100%;height:100%;background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20viewBox%3D'0%200%20120%20120'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20xmlns%3Axlink%3D'http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink'%3E%3Cdefs%3E%3Cline%20id%3D'l'%20x1%3D'60'%20x2%3D'60'%20y1%3D'7'%20y2%3D'27'%20stroke%3D'%236c6c6c'%20stroke-width%3D'11'%20stroke-linecap%3D'round'%2F%3E%3C%2Fdefs%3E%3Cg%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(30%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(60%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(90%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(120%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(150%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.37'%20transform%3D'rotate(180%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.46'%20transform%3D'rotate(210%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.56'%20transform%3D'rotate(240%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.66'%20transform%3D'rotate(270%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.75'%20transform%3D'rotate(300%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.85'%20transform%3D'rotate(330%2060%2C60)'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\");background-position:50%;background-size:100%;background-repeat:no-repeat}.swiper-lazy-preloader-white:after{background-image:url(\"data:image/svg+xml;charset=utf-8,%3Csvg%20viewBox%3D'0%200%20120%20120'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20xmlns%3Axlink%3D'http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink'%3E%3Cdefs%3E%3Cline%20id%3D'l'%20x1%3D'60'%20x2%3D'60'%20y1%3D'7'%20y2%3D'27'%20stroke%3D'%23fff'%20stroke-width%3D'11'%20stroke-linecap%3D'round'%2F%3E%3C%2Fdefs%3E%3Cg%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(30%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(60%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(90%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(120%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.27'%20transform%3D'rotate(150%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.37'%20transform%3D'rotate(180%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.46'%20transform%3D'rotate(210%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.56'%20transform%3D'rotate(240%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.66'%20transform%3D'rotate(270%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.75'%20transform%3D'rotate(300%2060%2C60)'%2F%3E%3Cuse%20xlink%3Ahref%3D'%23l'%20opacity%3D'.85'%20transform%3D'rotate(330%2060%2C60)'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E\")}@-webkit-keyframes swiper-preloader-spin{100%{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}@keyframes swiper-preloader-spin{100%{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}.swiper-container .swiper-notification{position:absolute;left:0;top:0;pointer-events:none;opacity:0;z-index:-1000}.swiper-container-fade.swiper-container-free-mode .swiper-slide{-webkit-transition-timing-function:ease-out;-o-transition-timing-function:ease-out;transition-timing-function:ease-out}.swiper-container-fade .swiper-slide{pointer-events:none;-webkit-transition-property:opacity;-o-transition-property:opacity;transition-property:opacity}.swiper-container-fade .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-fade .swiper-slide-active,.swiper-container-fade .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-cube{overflow:visible}.swiper-container-cube .swiper-slide{pointer-events:none;-webkit-backface-visibility:hidden;backface-visibility:hidden;z-index:1;visibility:hidden;-webkit-transform-origin:0 0;-ms-transform-origin:0 0;transform-origin:0 0;width:100%;height:100%}.swiper-container-cube .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-cube.swiper-container-rtl .swiper-slide{-webkit-transform-origin:100% 0;-ms-transform-origin:100% 0;transform-origin:100% 0}.swiper-container-cube .swiper-slide-active,.swiper-container-cube .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-cube .swiper-slide-active,.swiper-container-cube .swiper-slide-next,.swiper-container-cube .swiper-slide-next+.swiper-slide,.swiper-container-cube .swiper-slide-prev{pointer-events:auto;visibility:visible}.swiper-container-cube .swiper-slide-shadow-bottom,.swiper-container-cube .swiper-slide-shadow-left,.swiper-container-cube .swiper-slide-shadow-right,.swiper-container-cube .swiper-slide-shadow-top{z-index:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}.swiper-container-cube .swiper-cube-shadow{position:absolute;left:0;bottom:0;width:100%;height:100%;background:#000;opacity:.6;-webkit-filter:blur(50px);filter:blur(50px);z-index:0}.swiper-container-flip{overflow:visible}.swiper-container-flip .swiper-slide{pointer-events:none;-webkit-backface-visibility:hidden;backface-visibility:hidden;z-index:1}.swiper-container-flip .swiper-slide .swiper-slide{pointer-events:none}.swiper-container-flip .swiper-slide-active,.swiper-container-flip .swiper-slide-active .swiper-slide-active{pointer-events:auto}.swiper-container-flip .swiper-slide-shadow-bottom,.swiper-container-flip .swiper-slide-shadow-left,.swiper-container-flip .swiper-slide-shadow-right,.swiper-container-flip .swiper-slide-shadow-top{z-index:0;-webkit-backface-visibility:hidden;backface-visibility:hidden}.swiper-container-coverflow .swiper-wrapper{-ms-perspective:1200px}", ""]);
 
 // exports
 
@@ -1205,7 +1547,7 @@ module.exports = array.push;
 /* 16 */
 /***/ (function(module, exports) {
 
-module.exports = "<div class=\"calender-week-wrapper\">\r\n  <div ref=\"calenderMonthWrapper\" class=\"calender-month\" v-if=\"calenderOption.showHeader\">\r\n    <div class=\"month-list swiper-wrapper\">\r\n      <div class=\"month-item\">\r\n        <span class=\"month\">{{dateDescription}}</span>\r\n      </div>\r\n    </div>\r\n  </div>\r\n  <div class=\"calender-week\">\r\n    <span class=\"week-item\">日</span>\r\n    <span class=\"week-item\">一</span>\r\n    <span class=\"week-item\">二</span>\r\n    <span class=\"week-item\">三</span>\r\n    <span class=\"week-item\">四</span>\r\n    <span class=\"week-item\">五</span>\r\n    <span class=\"week-item\">六</span>\r\n  </div>\r\n  {{calendarOptionComputed}}\r\n  <swiper class=\"calender-day\" :options=\"daySwiperOption\" ref=\"daySwiper\">\r\n    <swiper-slide v-for=\"weekCalender in weekCalender.WeekDayList\" class=\"day-items swiper-slide\">\r\n      <div v-for=\"item in weekCalender.dayList\" :data-date=\"item.currentDate\" class=\"item\">\r\n        <span v-on:click=\"chooseDayItemHandle(item,$event)\" :class=\"item.dayClass\">{{item.dayDesc}}</span>\r\n      </div>\r\n    </swiper-slide>\r\n\r\n  </swiper>\r\n</div>";
+module.exports = "<div class=\"calender-week-wrapper\">\r\n  <div ref=\"calenderMonthWrapper\" class=\"calender-month\" v-if=\"calenderOption.showHeader\">\r\n    <div class=\"month-list swiper-wrapper\">\r\n      <div class=\"month-item\">\r\n        <span class=\"month\">{{dateDescription}}</span>\r\n      </div>\r\n    </div>\r\n  </div>\r\n  <div class=\"calender-week\">\r\n    <span class=\"week-item\">日</span>\r\n    <span class=\"week-item\">一</span>\r\n    <span class=\"week-item\">二</span>\r\n    <span class=\"week-item\">三</span>\r\n    <span class=\"week-item\">四</span>\r\n    <span class=\"week-item\">五</span>\r\n    <span class=\"week-item\">六</span>\r\n  </div>\r\n  {{calendarOptionComputed}} {{calenderDayStatusComputed}}\r\n  <swiper class=\"calender-day\" :options=\"daySwiperOption\" ref=\"daySwiper\">\r\n    <swiper-slide v-for=\"weekCalender in weekCalender.WeekDayList\" :data-date=\"weekCalender.currentMonthDate\" class=\"day-items swiper-slide\">\r\n      <div v-for=\"item in weekCalender.dayList\" :data-date=\"item.currentDate\" class=\"item\">\r\n        <span v-on:click=\"chooseDayItemHandle(item,$event)\" :class=\"item.dayClass\">{{item.dayDesc}}</span>\r\n      </div>\r\n    </swiper-slide>\r\n\r\n  </swiper>\r\n</div>";
 
 /***/ }),
 /* 17 */
@@ -1900,7 +2242,7 @@ module.exports = function (css) {
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
- * Swiper 4.3.3
+ * Swiper 4.3.5
  * Most modern mobile touch slider and framework with hardware accelerated transitions
  * http://www.idangero.us/swiper/
  *
@@ -1908,7 +2250,7 @@ module.exports = function (css) {
  *
  * Released under the MIT License
  *
- * Released on: June 5, 2018
+ * Released on: July 31, 2018
  */
 
 (function (global, factory) {
@@ -1918,7 +2260,7 @@ module.exports = function (css) {
 }(this, (function () { 'use strict';
 
   /**
-   * SSR Window 1.0.0
+   * SSR Window 1.0.1
    * Better handling for window object in SSR environment
    * https://github.com/nolimits4web/ssr-window
    *
@@ -1926,88 +2268,72 @@ module.exports = function (css) {
    *
    * Licensed under MIT
    *
-   * Released on: February 10, 2018
+   * Released on: July 18, 2018
    */
-  var d;
-  if (typeof document === 'undefined') {
-    d = {
-      body: {},
-      addEventListener: function addEventListener() {},
-      removeEventListener: function removeEventListener() {},
-      activeElement: {
-        blur: function blur() {},
-        nodeName: '',
-      },
-      querySelector: function querySelector() {
-        return null;
-      },
-      querySelectorAll: function querySelectorAll() {
-        return [];
-      },
-      getElementById: function getElementById() {
-        return null;
-      },
-      createEvent: function createEvent() {
-        return {
-          initEvent: function initEvent() {},
-        };
-      },
-      createElement: function createElement() {
-        return {
-          children: [],
-          childNodes: [],
-          style: {},
-          setAttribute: function setAttribute() {},
-          getElementsByTagName: function getElementsByTagName() {
-            return [];
-          },
-        };
-      },
-      location: { hash: '' },
-    };
-  } else {
-    // eslint-disable-next-line
-    d = document;
-  }
+  var doc = (typeof document === 'undefined') ? {
+    body: {},
+    addEventListener: function addEventListener() {},
+    removeEventListener: function removeEventListener() {},
+    activeElement: {
+      blur: function blur() {},
+      nodeName: '',
+    },
+    querySelector: function querySelector() {
+      return null;
+    },
+    querySelectorAll: function querySelectorAll() {
+      return [];
+    },
+    getElementById: function getElementById() {
+      return null;
+    },
+    createEvent: function createEvent() {
+      return {
+        initEvent: function initEvent() {},
+      };
+    },
+    createElement: function createElement() {
+      return {
+        children: [],
+        childNodes: [],
+        style: {},
+        setAttribute: function setAttribute() {},
+        getElementsByTagName: function getElementsByTagName() {
+          return [];
+        },
+      };
+    },
+    location: { hash: '' },
+  } : document; // eslint-disable-line
 
-  var doc = d;
-
-  var w;
-  if (typeof window === 'undefined') {
-    w = {
-      document: doc,
-      navigator: {
-        userAgent: '',
-      },
-      location: {},
-      history: {},
-      CustomEvent: function CustomEvent() {
-        return this;
-      },
-      addEventListener: function addEventListener() {},
-      removeEventListener: function removeEventListener() {},
-      getComputedStyle: function getComputedStyle() {
-        return {
-          getPropertyValue: function getPropertyValue() {
-            return '';
-          },
-        };
-      },
-      Image: function Image() {},
-      Date: function Date() {},
-      screen: {},
-      setTimeout: function setTimeout() {},
-      clearTimeout: function clearTimeout() {},
-    };
-  } else {
-    // eslint-disable-next-line
-    w = window;
-  }
-
-  var win = w;
+  var win = (typeof window === 'undefined') ? {
+    document: doc,
+    navigator: {
+      userAgent: '',
+    },
+    location: {},
+    history: {},
+    CustomEvent: function CustomEvent() {
+      return this;
+    },
+    addEventListener: function addEventListener() {},
+    removeEventListener: function removeEventListener() {},
+    getComputedStyle: function getComputedStyle() {
+      return {
+        getPropertyValue: function getPropertyValue() {
+          return '';
+        },
+      };
+    },
+    Image: function Image() {},
+    Date: function Date() {},
+    screen: {},
+    setTimeout: function setTimeout() {},
+    clearTimeout: function clearTimeout() {},
+  } : window; // eslint-disable-line
 
   /**
-   * Dom7 2.0.6
+   * Dom7 2.0.7
    * Minimalistic JavaScript library for DOM manipulation, with a jQuery-compatible API
    * http://framework7.io/docs/dom.html
    *
@@ -2017,7 +2343,7 @@ module.exports = function (css) {
    *
    * Licensed under MIT
    *
-   * Released on: May 27, 2018
+   * Released on: June 14, 2018
    */
 
   var Dom7 = function Dom7(arr) {
@@ -2104,7 +2430,7 @@ module.exports = function (css) {
     var classes = className.split(' ');
     for (var i = 0; i < classes.length; i += 1) {
       for (var j = 0; j < this.length; j += 1) {
-        if (typeof this$1[j].classList !== 'undefined') { this$1[j].classList.add(classes[i]); }
+        if (typeof this$1[j] !== 'undefined' && typeof this$1[j].classList !== 'undefined') { this$1[j].classList.add(classes[i]); }
       }
     }
     return this;
@@ -2115,7 +2441,7 @@ module.exports = function (css) {
     var classes = className.split(' ');
     for (var i = 0; i < classes.length; i += 1) {
       for (var j = 0; j < this.length; j += 1) {
-        if (typeof this$1[j].classList !== 'undefined') { this$1[j].classList.remove(classes[i]); }
+        if (typeof this$1[j] !== 'undefined' && typeof this$1[j].classList !== 'undefined') { this$1[j].classList.remove(classes[i]); }
       }
     }
     return this;
@@ -2130,7 +2456,7 @@ module.exports = function (css) {
     var classes = className.split(' ');
     for (var i = 0; i < classes.length; i += 1) {
       for (var j = 0; j < this.length; j += 1) {
-        if (typeof this$1[j].classList !== 'undefined') { this$1[j].classList.toggle(classes[i]); }
+        if (typeof this$1[j] !== 'undefined' && typeof this$1[j].classList !== 'undefined') { this$1[j].classList.toggle(classes[i]); }
       }
     }
     return this;
@@ -2988,6 +3314,7 @@ module.exports = function (css) {
   };
 
   var staticAccessors = { components: { configurable: true } };
+
   SwiperClass.prototype.on = function on (events, handler, priority) {
     var self = this;
     if (typeof handler !== 'function') { return self; }
@@ -2998,6 +3325,7 @@ module.exports = function (css) {
     });
     return self;
   };
+
   SwiperClass.prototype.once = function once (events, handler, priority) {
     var self = this;
     if (typeof handler !== 'function') { return self; }
@@ -3010,6 +3338,7 @@ module.exports = function (css) {
     }
     return self.on(events, onceHandler, priority);
   };
+
   SwiperClass.prototype.off = function off (events, handler) {
     var self = this;
     if (!self.eventsListeners) { return self; }
@@ -3026,6 +3355,7 @@ module.exports = function (css) {
     });
     return self;
   };
+
   SwiperClass.prototype.emit = function emit () {
       var args = [], len = arguments.length;
       while ( len-- ) args[ len ] = arguments[ len ];
@@ -3058,6 +3388,7 @@ module.exports = function (css) {
     });
     return self;
   };
+
   SwiperClass.prototype.useModulesParams = function useModulesParams (instanceParams) {
     var instance = this;
     if (!instance.modules) { return; }
@@ -3069,6 +3400,7 @@ module.exports = function (css) {
       }
     });
   };
+
   SwiperClass.prototype.useModules = function useModules (modulesParams) {
       if ( modulesParams === void 0 ) modulesParams = {};
 
@@ -3101,11 +3433,13 @@ module.exports = function (css) {
       }
     });
   };
+
   staticAccessors.components.set = function (components) {
     var Class = this;
     if (!Class.use) { return; }
     Class.use(components);
   };
+
   SwiperClass.installModule = function installModule (module) {
       var params = [], len = arguments.length - 1;
       while ( len-- > 0 ) params[ len ] = arguments[ len + 1 ];
@@ -3132,6 +3466,7 @@ module.exports = function (css) {
     }
     return Class;
   };
+
   SwiperClass.use = function use (module) {
       var params = [], len = arguments.length - 1;
       while ( len-- > 0 ) params[ len ] = arguments[ len + 1 ];
@@ -3291,13 +3626,13 @@ module.exports = function (css) {
           slide[0].style.webkitTransform = 'none';
         }
         if (swiper.isHorizontal()) {
-          slideSize = slide[0].getBoundingClientRect().width +
-            parseFloat(slideStyles.getPropertyValue('margin-left')) +
-            parseFloat(slideStyles.getPropertyValue('margin-right'));
+          slideSize = slide[0].getBoundingClientRect().width
+            + parseFloat(slideStyles.getPropertyValue('margin-left'))
+            + parseFloat(slideStyles.getPropertyValue('margin-right'));
         } else {
-          slideSize = slide[0].getBoundingClientRect().height +
-            parseFloat(slideStyles.getPropertyValue('margin-top')) +
-            parseFloat(slideStyles.getPropertyValue('margin-bottom'));
+          slideSize = slide[0].getBoundingClientRect().height
+            + parseFloat(slideStyles.getPropertyValue('margin-top'))
+            + parseFloat(slideStyles.getPropertyValue('margin-bottom'));
         }
         if (currentTransform) {
           slide[0].style.transform = currentTransform;
@@ -3481,17 +3816,15 @@ module.exports = function (css) {
 
     for (var i = 0; i < slides.length; i += 1) {
       var slide = slides[i];
-      var slideProgress =
-        (
-          (offsetCenter + (params.centeredSlides ? swiper.minTranslate() : 0)) - slide.swiperSlideOffset
-        ) / (slide.swiperSlideSize + params.spaceBetween);
+      var slideProgress = (
+        (offsetCenter + (params.centeredSlides ? swiper.minTranslate() : 0)) - slide.swiperSlideOffset
+      ) / (slide.swiperSlideSize + params.spaceBetween);
       if (params.watchSlidesVisibility) {
         var slideBefore = -(offsetCenter - slide.swiperSlideOffset);
         var slideAfter = slideBefore + swiper.slidesSizesGrid[i];
-        var isVisible =
-                  (slideBefore >= 0 && slideBefore < swiper.size) ||
-                  (slideAfter > 0 && slideAfter <= swiper.size) ||
-                  (slideBefore <= 0 && slideAfter >= swiper.size);
+        var isVisible = (slideBefore >= 0 && slideBefore < swiper.size)
+                  || (slideAfter > 0 && slideAfter <= swiper.size)
+                  || (slideBefore <= 0 && slideAfter >= swiper.size);
         if (isVisible) {
           slides.eq(i).addClass(params.slideVisibleClass);
         }
@@ -3883,7 +4216,7 @@ module.exports = function (css) {
     var previousIndex = swiper.previousIndex;
     var activeIndex = swiper.activeIndex;
     var rtl = swiper.rtlTranslate;
-    if (swiper.animating && params.preventIntercationOnTransition) {
+    if (swiper.animating && params.preventInteractionOnTransition) {
       return false;
     }
 
@@ -3964,6 +4297,8 @@ module.exports = function (css) {
             if (e.target !== this) { return; }
             swiper.$wrapperEl[0].removeEventListener('transitionend', swiper.onSlideToWrapperTransitionEnd);
             swiper.$wrapperEl[0].removeEventListener('webkitTransitionEnd', swiper.onSlideToWrapperTransitionEnd);
+            swiper.onSlideToWrapperTransitionEnd = null;
+            delete swiper.onSlideToWrapperTransitionEnd;
             swiper.transitionEnd(runCallbacks, direction);
           };
         }
@@ -4089,8 +4424,8 @@ module.exports = function (css) {
       realIndex = parseInt($(swiper.clickedSlide).attr('data-swiper-slide-index'), 10);
       if (params.centeredSlides) {
         if (
-          (slideToIndex < swiper.loopedSlides - (slidesPerView / 2)) ||
-          (slideToIndex > (swiper.slides.length - swiper.loopedSlides) + (slidesPerView / 2))
+          (slideToIndex < swiper.loopedSlides - (slidesPerView / 2))
+          || (slideToIndex > (swiper.slides.length - swiper.loopedSlides) + (slidesPerView / 2))
         ) {
           swiper.loopFix();
           slideToIndex = $wrapperEl
@@ -4315,7 +4650,8 @@ module.exports = function (css) {
     if (index <= 0) {
       swiper.prependSlide(slides);
       return;
-    } else if (index >= baseLength) {
+    }
+    if (index >= baseLength) {
       swiper.appendSlide(slides);
       return;
     }
@@ -4485,11 +4821,10 @@ module.exports = function (css) {
     if (device.os && device.os === 'ios') {
       var osVersionArr = device.osVersion.split('.');
       var metaViewport = doc.querySelector('meta[name="viewport"]');
-      device.minimalUi =
-        !device.webView &&
-        (ipod || iphone) &&
-        (osVersionArr[0] * 1 === 7 ? osVersionArr[1] * 1 >= 1 : osVersionArr[0] * 1 > 7) &&
-        metaViewport && metaViewport.getAttribute('content').indexOf('minimal-ui') >= 0;
+      device.minimalUi = !device.webView
+        && (ipod || iphone)
+        && (osVersionArr[0] * 1 === 7 ? osVersionArr[1] * 1 >= 1 : osVersionArr[0] * 1 > 7)
+        && metaViewport && metaViewport.getAttribute('content').indexOf('minimal-ui') >= 0;
     }
 
     // Pixel Ratio
@@ -4504,7 +4839,7 @@ module.exports = function (css) {
     var data = swiper.touchEventsData;
     var params = swiper.params;
     var touches = swiper.touches;
-    if (swiper.animating && params.preventIntercationOnTransition) {
+    if (swiper.animating && params.preventInteractionOnTransition) {
       return;
     }
     var e = event;
@@ -4527,12 +4862,12 @@ module.exports = function (css) {
 
     // Do NOT start if iOS edge swipe is detected. Otherwise iOS app (UIWebView) cannot swipe-to-go-back anymore
 
+    var edgeSwipeDetection = params.edgeSwipeDetection || params.iOSEdgeSwipeDetection;
+    var edgeSwipeThreshold = params.edgeSwipeThreshold || params.iOSEdgeSwipeThreshold;
     if (
-      Device.ios &&
-      !Device.cordova &&
-      params.iOSEdgeSwipeDetection &&
-      ((startX <= params.iOSEdgeSwipeThreshold) ||
-      (startX >= win.screen.width - params.iOSEdgeSwipeThreshold))
+      edgeSwipeDetection
+      && ((startX <= edgeSwipeThreshold)
+      || (startX >= win.screen.width - edgeSwipeThreshold))
     ) {
       return;
     }
@@ -4556,9 +4891,9 @@ module.exports = function (css) {
       var preventDefault = true;
       if ($(e.target).is(data.formElements)) { preventDefault = false; }
       if (
-        doc.activeElement &&
-        $(doc.activeElement).is(data.formElements) &&
-        doc.activeElement !== e.target
+        doc.activeElement
+        && $(doc.activeElement).is(data.formElements)
+        && doc.activeElement !== e.target
       ) {
         doc.activeElement.blur();
       }
@@ -4609,16 +4944,16 @@ module.exports = function (css) {
       if (swiper.isVertical()) {
         // Vertical
         if (
-          (pageY < touches.startY && swiper.translate <= swiper.maxTranslate()) ||
-          (pageY > touches.startY && swiper.translate >= swiper.minTranslate())
+          (pageY < touches.startY && swiper.translate <= swiper.maxTranslate())
+          || (pageY > touches.startY && swiper.translate >= swiper.minTranslate())
         ) {
           data.isTouched = false;
           data.isMoved = false;
           return;
         }
       } else if (
-        (pageX < touches.startX && swiper.translate <= swiper.maxTranslate()) ||
-        (pageX > touches.startX && swiper.translate >= swiper.minTranslate())
+        (pageX < touches.startX && swiper.translate <= swiper.maxTranslate())
+        || (pageX > touches.startX && swiper.translate >= swiper.minTranslate())
       ) {
         return;
       }
@@ -4640,6 +4975,7 @@ module.exports = function (css) {
 
     var diffX = touches.currentX - touches.startX;
     var diffY = touches.currentY - touches.startY;
+    if (swiper.params.threshold && Math.sqrt((Math.pow( diffX, 2 )) + (Math.pow( diffY, 2 ))) < swiper.params.threshold) { return; }
 
     if (typeof data.isScrolling === 'undefined') {
       var touchAngle;
@@ -4656,7 +4992,7 @@ module.exports = function (css) {
     if (data.isScrolling) {
       swiper.emit('touchMoveOpposite', e);
     }
-    if (typeof startMoving === 'undefined') {
+    if (typeof data.startMoving === 'undefined') {
       if (touches.currentX !== touches.startX || touches.currentY !== touches.startY) {
         data.startMoving = true;
       }
@@ -4847,7 +5183,8 @@ module.exports = function (css) {
       if (currentPos < -swiper.minTranslate()) {
         swiper.slideTo(swiper.activeIndex);
         return;
-      } else if (currentPos > -swiper.maxTranslate()) {
+      }
+      if (currentPos > -swiper.maxTranslate()) {
         if (swiper.slides.length < snapGrid.length) {
           swiper.slideTo(snapGrid.length - 1);
         } else {
@@ -5397,11 +5734,11 @@ module.exports = function (css) {
     initialSlide: 0,
     speed: 300,
     //
-    preventIntercationOnTransition: false,
+    preventInteractionOnTransition: false,
 
     // To support iOS's swipe-to-go-back gesture (when being used in-app, with UIWebView).
-    iOSEdgeSwipeDetection: false,
-    iOSEdgeSwipeThreshold: 20,
+    edgeSwipeDetection: false,
+    edgeSwipeThreshold: 20,
 
     // Free mode
     freeMode: false,
@@ -5578,8 +5915,8 @@ module.exports = function (css) {
             params[moduleParamName] = { enabled: true };
           }
           if (
-            typeof params[moduleParamName] === 'object' &&
-            !('enabled' in params[moduleParamName])
+            typeof params[moduleParamName] === 'object'
+            && !('enabled' in params[moduleParamName])
           ) {
             params[moduleParamName].enabled = true;
           }
@@ -5748,6 +6085,7 @@ module.exports = function (css) {
     Swiper.prototype.constructor = Swiper;
 
     var staticAccessors = { extendedDefaults: { configurable: true },defaults: { configurable: true },Class: { configurable: true },$: { configurable: true } };
+
     Swiper.prototype.slidesPerViewDynamic = function slidesPerViewDynamic () {
       var swiper = this;
       var params = swiper.params;
@@ -5782,6 +6120,7 @@ module.exports = function (css) {
       }
       return spv;
     };
+
     Swiper.prototype.update = function update$$1 () {
       var swiper = this;
       if (!swiper || swiper.destroyed) { return; }
@@ -5824,6 +6163,7 @@ module.exports = function (css) {
       }
       swiper.emit('update');
     };
+
     Swiper.prototype.init = function init () {
       var swiper = this;
       if (swiper.initialized) { return; }
@@ -5878,6 +6218,7 @@ module.exports = function (css) {
       // Emit
       swiper.emit('init');
     };
+
     Swiper.prototype.destroy = function destroy (deleteInstance, cleanStyles) {
       if ( deleteInstance === void 0 ) deleteInstance = true;
       if ( cleanStyles === void 0 ) cleanStyles = true;
@@ -5940,18 +6281,23 @@ module.exports = function (css) {
 
       return null;
     };
+
     Swiper.extendDefaults = function extendDefaults (newDefaults) {
       Utils.extend(extendedDefaults, newDefaults);
     };
+
     staticAccessors.extendedDefaults.get = function () {
       return extendedDefaults;
     };
+
     staticAccessors.defaults.get = function () {
       return defaults;
     };
+
     staticAccessors.Class.get = function () {
       return SwiperClass$$1;
     };
+
     staticAccessors.$.get = function () {
       return $;
     };
@@ -6035,9 +6381,22 @@ module.exports = function (css) {
 
       var ObserverFunc = Observer.func;
       var observer = new ObserverFunc(function (mutations) {
-        mutations.forEach(function (mutation) {
-          swiper.emit('observerUpdate', mutation);
-        });
+        // The observerUpdate event should only be triggered
+        // once despite the number of mutations.  Additional
+        // triggers are redundant and are very costly
+        if (mutations.length === 1) {
+          swiper.emit('observerUpdate', mutations[0]);
+          return;
+        }
+        var observerUpdate = function observerUpdate() {
+          swiper.emit('observerUpdate', mutations[0]);
+        };
+
+        if (win.requestAnimationFrame) {
+          win.requestAnimationFrame(observerUpdate);
+        } else {
+          win.setTimeout(observerUpdate, 0);
+        }
       });
 
       observer.observe(target, {
@@ -6321,8 +6680,8 @@ module.exports = function (css) {
         for (var i = 0; i < swiperCoord.length; i += 1) {
           var point = swiperCoord[i];
           if (
-            point[0] >= 0 && point[0] <= windowWidth &&
-            point[1] >= 0 && point[1] <= windowHeight
+            point[0] >= 0 && point[0] <= windowWidth
+            && point[1] >= 0 && point[1] <= windowHeight
           ) {
             inView = true;
           }
@@ -6406,12 +6765,12 @@ module.exports = function (css) {
       isSupported = typeof element[eventName] === 'function';
     }
 
-    if (!isSupported &&
-      doc.implementation &&
-      doc.implementation.hasFeature &&
+    if (!isSupported
+      && doc.implementation
+      && doc.implementation.hasFeature
       // always returns true in newer browsers as per the standard.
       // @see http://dom.spec.whatwg.org/#dom-domimplementation-hasfeature
-      doc.implementation.hasFeature('', '') !== true
+      && doc.implementation.hasFeature('', '') !== true
     ) {
       // This is the only way to test support for the `wheel` event in IE9+.
       isSupported = doc.implementation.hasFeature('Events.wheel', '3.0');
@@ -6684,10 +7043,10 @@ module.exports = function (css) {
       if (params.nextEl) {
         $nextEl = $(params.nextEl);
         if (
-          swiper.params.uniqueNavElements &&
-          typeof params.nextEl === 'string' &&
-          $nextEl.length > 1 &&
-          swiper.$el.find(params.nextEl).length === 1
+          swiper.params.uniqueNavElements
+          && typeof params.nextEl === 'string'
+          && $nextEl.length > 1
+          && swiper.$el.find(params.nextEl).length === 1
         ) {
           $nextEl = swiper.$el.find(params.nextEl);
         }
@@ -6695,10 +7054,10 @@ module.exports = function (css) {
       if (params.prevEl) {
         $prevEl = $(params.prevEl);
         if (
-          swiper.params.uniqueNavElements &&
-          typeof params.prevEl === 'string' &&
-          $prevEl.length > 1 &&
-          swiper.$el.find(params.prevEl).length === 1
+          swiper.params.uniqueNavElements
+          && typeof params.prevEl === 'string'
+          && $prevEl.length > 1
+          && swiper.$el.find(params.prevEl).length === 1
         ) {
           $prevEl = swiper.$el.find(params.prevEl);
         }
@@ -6789,9 +7148,9 @@ module.exports = function (css) {
         var $nextEl = ref.$nextEl;
         var $prevEl = ref.$prevEl;
         if (
-          swiper.params.navigation.hideOnClick &&
-          !$(e.target).is($prevEl) &&
-          !$(e.target).is($nextEl)
+          swiper.params.navigation.hideOnClick
+          && !$(e.target).is($prevEl)
+          && !$(e.target).is($nextEl)
         ) {
           if ($nextEl) { $nextEl.toggleClass(swiper.params.navigation.hiddenClass); }
           if ($prevEl) { $prevEl.toggleClass(swiper.params.navigation.hiddenClass); }
@@ -6955,10 +7314,9 @@ module.exports = function (css) {
         if (params.renderFraction) {
           paginationHTML = params.renderFraction.call(swiper, params.currentClass, params.totalClass);
         } else {
-          paginationHTML =
-          "<span class=\"" + (params.currentClass) + "\"></span>" +
-          ' / ' +
-          "<span class=\"" + (params.totalClass) + "\"></span>";
+          paginationHTML = "<span class=\"" + (params.currentClass) + "\"></span>"
+          + ' / '
+          + "<span class=\"" + (params.totalClass) + "\"></span>";
         }
         $el.html(paginationHTML);
       }
@@ -6983,10 +7341,10 @@ module.exports = function (css) {
       if ($el.length === 0) { return; }
 
       if (
-        swiper.params.uniqueNavElements &&
-        typeof params.el === 'string' &&
-        $el.length > 1 &&
-        swiper.$el.find(params.el).length === 1
+        swiper.params.uniqueNavElements
+        && typeof params.el === 'string'
+        && $el.length > 1
+        && swiper.$el.find(params.el).length === 1
       ) {
         $el = swiper.$el.find(params.el);
       }
@@ -7121,10 +7479,10 @@ module.exports = function (css) {
       click: function click(e) {
         var swiper = this;
         if (
-          swiper.params.pagination.el &&
-          swiper.params.pagination.hideOnClick &&
-          swiper.pagination.$el.length > 0 &&
-          !$(e.target).hasClass(swiper.params.pagination.bulletClass)
+          swiper.params.pagination.el
+          && swiper.params.pagination.hideOnClick
+          && swiper.pagination.$el.length > 0
+          && !$(e.target).hasClass(swiper.params.pagination.bulletClass)
         ) {
           swiper.pagination.$el.toggleClass(swiper.params.pagination.hiddenClass);
         }
@@ -7330,8 +7688,8 @@ module.exports = function (css) {
       var params = swiper.params;
       var $el = scrollbar.$el;
       var target = $el[0];
-      var activeListener = Support.passiveListener && params.passiveListener ? { passive: false, capture: false } : false;
-      var passiveListener = Support.passiveListener && params.passiveListener ? { passive: true, capture: false } : false;
+      var activeListener = Support.passiveListener && params.passiveListeners ? { passive: false, capture: false } : false;
+      var passiveListener = Support.passiveListener && params.passiveListeners ? { passive: true, capture: false } : false;
       if (!Support.touch && (Support.pointerEvents || Support.prefixedPointerEvents)) {
         target.addEventListener(touchEventsDesktop.start, swiper.scrollbar.onDragStart, activeListener);
         doc.addEventListener(touchEventsDesktop.move, swiper.scrollbar.onDragMove, activeListener);
@@ -7358,8 +7716,8 @@ module.exports = function (css) {
       var params = swiper.params;
       var $el = scrollbar.$el;
       var target = $el[0];
-      var activeListener = Support.passiveListener && params.passiveListener ? { passive: false, capture: false } : false;
-      var passiveListener = Support.passiveListener && params.passiveListener ? { passive: true, capture: false } : false;
+      var activeListener = Support.passiveListener && params.passiveListeners ? { passive: false, capture: false } : false;
+      var passiveListener = Support.passiveListener && params.passiveListeners ? { passive: true, capture: false } : false;
       if (!Support.touch && (Support.pointerEvents || Support.prefixedPointerEvents)) {
         target.removeEventListener(touchEventsDesktop.start, swiper.scrollbar.onDragStart, activeListener);
         doc.removeEventListener(touchEventsDesktop.move, swiper.scrollbar.onDragMove, activeListener);
@@ -7744,19 +8102,19 @@ module.exports = function (css) {
 
       if (!image.isMoved && !zoom.isScaling) {
         if (
-          swiper.isHorizontal() &&
-          (
-            (Math.floor(image.minX) === Math.floor(image.startX) && image.touchesCurrent.x < image.touchesStart.x) ||
-            (Math.floor(image.maxX) === Math.floor(image.startX) && image.touchesCurrent.x > image.touchesStart.x)
+          swiper.isHorizontal()
+          && (
+            (Math.floor(image.minX) === Math.floor(image.startX) && image.touchesCurrent.x < image.touchesStart.x)
+            || (Math.floor(image.maxX) === Math.floor(image.startX) && image.touchesCurrent.x > image.touchesStart.x)
           )
         ) {
           image.isTouched = false;
           return;
-        } else if (
-          !swiper.isHorizontal() &&
-          (
-            (Math.floor(image.minY) === Math.floor(image.startY) && image.touchesCurrent.y < image.touchesStart.y) ||
-            (Math.floor(image.maxY) === Math.floor(image.startY) && image.touchesCurrent.y > image.touchesStart.y)
+        } if (
+          !swiper.isHorizontal()
+          && (
+            (Math.floor(image.minY) === Math.floor(image.startY) && image.touchesCurrent.y < image.touchesStart.y)
+            || (Math.floor(image.maxY) === Math.floor(image.startY) && image.touchesCurrent.y > image.touchesStart.y)
           )
         ) {
           image.isTouched = false;
@@ -8372,9 +8730,9 @@ module.exports = function (css) {
     getInterpolateFunction: function getInterpolateFunction(c) {
       var swiper = this;
       if (!swiper.controller.spline) {
-        swiper.controller.spline = swiper.params.loop ?
-          new Controller.LinearSpline(swiper.slidesGrid, c.slidesGrid) :
-          new Controller.LinearSpline(swiper.snapGrid, c.snapGrid);
+        swiper.controller.spline = swiper.params.loop
+          ? new Controller.LinearSpline(swiper.slidesGrid, c.slidesGrid)
+          : new Controller.LinearSpline(swiper.snapGrid, c.snapGrid);
       }
     },
     setTranslate: function setTranslate(setTranslate$1, byController) {
@@ -8426,6 +8784,11 @@ module.exports = function (css) {
         c.setTransition(duration, swiper);
         if (duration !== 0) {
           c.transitionStart();
+          if (c.params.autoHeight) {
+            Utils.nextTick(function () {
+              c.updateAutoHeight();
+            });
+          }
           c.$wrapperEl.transitionEnd(function () {
             if (!controlled) { return; }
             if (c.params.loop && swiper.params.controller.by === 'slide') {
@@ -9085,9 +9448,9 @@ module.exports = function (css) {
           ty = tx;
           tx = 0;
         }
-        var slideOpacity = swiper.params.fadeEffect.crossFade ?
-          Math.max(1 - Math.abs($slideEl[0].progress), 0) :
-          1 + Math.min(Math.max($slideEl[0].progress, -1), 0);
+        var slideOpacity = swiper.params.fadeEffect.crossFade
+          ? Math.max(1 - Math.abs($slideEl[0].progress), 0)
+          : 1 + Math.min(Math.max($slideEl[0].progress, -1), 0);
         $slideEl
           .css({
             opacity: slideOpacity,
@@ -9265,8 +9628,8 @@ module.exports = function (css) {
         } else {
           var shadowAngle = Math.abs(wrapperRotate) - (Math.floor(Math.abs(wrapperRotate) / 90) * 90);
           var multiplier = 1.5 - (
-            (Math.sin((shadowAngle * 2 * Math.PI) / 360) / 2) +
-            (Math.cos((shadowAngle * 2 * Math.PI) / 360) / 2)
+            (Math.sin((shadowAngle * 2 * Math.PI) / 360) / 2)
+            + (Math.cos((shadowAngle * 2 * Math.PI) / 360) / 2)
           );
           var scale1 = params.shadowScale;
           var scale2 = params.shadowScale / multiplier;
@@ -9652,10 +10015,6 @@ var Calender;
      */
     var DayStatus = /** @class */ (function () {
         function DayStatus() {
-            /**
-             * 每天状态列表
-             */
-            this.dayStatusList = [];
         }
         return DayStatus;
     }());
@@ -9692,6 +10051,10 @@ var Calender;
              * 每天日历是否可用(点击)
              */
             this.enabled = true;
+            /**
+             * 每天日历是否可用(点击)
+             */
+            this.oriEnabled = true;
         }
         return DayModel;
     }());
@@ -9953,14 +10316,14 @@ exports.mixins = mixins;
 /* unused harmony export Provide */
 /* unused harmony export Model */
 /* harmony export (immutable) */ __webpack_exports__["a"] = Prop;
-/* unused harmony export Watch */
-/* harmony export (immutable) */ __webpack_exports__["b"] = Emit;
+/* harmony export (immutable) */ __webpack_exports__["b"] = Watch;
+/* harmony export (immutable) */ __webpack_exports__["c"] = Emit;
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue__ = __webpack_require__(5);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_vue__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_vue_class_component__ = __webpack_require__(24);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_vue_class_component___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1_vue_class_component__);
-/* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "c", function() { return __WEBPACK_IMPORTED_MODULE_1_vue_class_component___default.a; });
-/* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "d", function() { return __WEBPACK_IMPORTED_MODULE_0_vue___default.a; });
+/* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "d", function() { return __WEBPACK_IMPORTED_MODULE_1_vue_class_component___default.a; });
+/* harmony reexport (default from non-hamory) */ __webpack_require__.d(__webpack_exports__, "e", function() { return __WEBPACK_IMPORTED_MODULE_0_vue___default.a; });
 /* unused harmony reexport Mixins */
 /** vue-property-decorator verson 7.0.0 MIT LICENSE copyright 2018 kaorun343 */
 
