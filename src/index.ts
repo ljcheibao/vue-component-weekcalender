@@ -41,7 +41,7 @@ export default class CalendarWeek extends Vue {
 
   /**
    * 设置每月对应的天数
-   */
+   
   private monthDays: object = {
     1: 31,
     2: 28,
@@ -55,7 +55,7 @@ export default class CalendarWeek extends Vue {
     10: 31,
     11: 30,
     12: 31
-  };
+  };*/
 
   /**
    * swiper对象
